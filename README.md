@@ -1,1 +1,0 @@
-# komobasai-pos2
