@@ -432,11 +432,28 @@ els.importItems.addEventListener("change",e=>{
   reader.readAsText(f);
 });
 
-// 同期（自己診断つき・text/plainでプリフライト回避）
+<script>
+// 画面下にログ出力欄を追加（1回だけ）
+(function ensureLogBox(){
+  if (document.getElementById("syncLog")) return;
+  const box = document.createElement("pre");
+  box.id = "syncLog";
+  box.style.cssText = "white-space:pre-wrap;background:#111;color:#0f0;padding:8px;margin:8px;border-radius:8px;max-height:220px;overflow:auto;";
+  box.textContent = "【同期ログ】ここに詳細が出ます";
+  document.body.appendChild(box);
+})();
+function logSync(msg){
+  const el = document.getElementById("syncLog");
+  el.textContent = `【同期ログ】\n${msg}`;
+}
+
+const WKEY="komaba_pos_gas_webhook_v1";
 async function fetchWithTimeout(input,init={},ms=15000){
   const ctrl=new AbortController(); const id=setTimeout(()=>ctrl.abort(),ms);
-  try{ return await fetch(input,{...init,signal:ctrl.signal}); } finally{ clearTimeout(id); }
+  try{ return await fetch(input,{...init,signal:ctrl.signal}); }
+  finally{ clearTimeout(id); }
 }
+
 els.syncGoogle.addEventListener("click", async ()=>{
   let url = localStorage.getItem(WKEY) || "";
   url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（必ず /exec）", url);
@@ -444,22 +461,39 @@ els.syncGoogle.addEventListener("click", async ()=>{
   localStorage.setItem(WKEY, url);
 
   try{
-    let ping = await fetchWithTimeout(url, {method:"GET", cache:"no-store"}, 8000);
+    // 1) /exec をGETで疎通確認
+    let ping;
+    try{
+      ping = await fetchWithTimeout(url, {method:"GET", cache:"no-store"}, 8000);
+    }catch(e){
+      alert("同期エラー: /exec に接続できません\n" + e.message);
+      logSync("PING失敗: "+e.message+"\nURL="+url);
+      return;
+    }
     const pingText = await ping.text().catch(()=>"(no body)");
-    if(!ping.ok){ alert(`同期エラー: /exec 応答 ${ping.status}\n${pingText}`); return; }
+    logSync(`PING: HTTP ${ping.status}\n${pingText}`);
+    if(!ping.ok){
+      alert(`同期エラー: /exec ${ping.status}\n${pingText}`);
+      return;
+    }
 
+    // 2) 本送信（text/plain）
+    const payload = JSON.stringify({ txs });
     const res = await fetchWithTimeout(url, {
       method:"POST",
-      headers:{ "Content-Type":"text/plain" }, // ← ここが肝
-      body: JSON.stringify({ txs })
+      headers:{ "Content-Type":"text/plain" },
+      body: payload
     }, 15000);
 
     const text = await res.text().catch(()=>"(no body)");
-    alert(res.ok ? `同期完了\nHTTP ${res.status}\n${text}` : `同期失敗\nHTTP ${res.status}\n${text}`);
+    logSync(`POST: HTTP ${res.status}\n${text}`);
+    alert(res.ok ? "同期完了" : `同期失敗 (${res.status})`);
   }catch(e){
     alert("同期エラー: "+e.message);
+    logSync("例外: "+e.message);
   }
 });
+</script>
 
 /* ================== 新規商品/デモ ================== */
 els.newItemBtn.addEventListener("click",()=>{ els.newForm.style.display = els.newForm.style.display==='none'?'flex':'none'; });
