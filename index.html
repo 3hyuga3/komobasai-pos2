@@ -425,22 +425,74 @@ els.importItems.addEventListener("change",e=>{
   };
   reader.readAsText(f);
 });
-// 学内GASへ同期（プリフライト回避・エラーメッセージ可視化）
+<script>
+// ---- ここから同期ボタンの置き換え ----
+const LS_WEBHOOK = "komaba_pos_gas_webhook_v1";
+
+// 汎用: タイムアウト付き fetch
+async function fetchWithTimeout(input, init={}, ms=15000){
+  const ctrl = new AbortController();
+  const id = setTimeout(()=>ctrl.abort(), ms);
+  try {
+    const res = await fetch(input, {...init, signal: ctrl.signal});
+    return res;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+// 学内GASへ同期（自己診断メッセージつき）
 els.syncGoogle.addEventListener("click", async ()=>{
-  const url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（/exec）");
+  // 直近URLを記憶しておき、空欄なら入力
+  let url = localStorage.getItem(LS_WEBHOOK) || "";
+  url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（必ず /exec）", url || "");
   if (!url) return;
+  localStorage.setItem(LS_WEBHOOK, url);
+
   try{
-    const res = await fetch(url, {
+    // 1) まず GET で生存確認（/exec を開くと "ok" が返る想定）
+    let ping;
+    try{
+      ping = await fetchWithTimeout(url, {method:"GET", cache:"no-store"}, 8000);
+    }catch(e){
+      alert("同期エラー: /exec への接続に失敗\n" + e.message + "\n\n" +
+            "対策: URLが正しいか /exec か、学内アカウントでログインしているか確認してください。");
+      return;
+    }
+    const pingText = await ping.text().catch(()=>"(no body)");
+    if(!ping.ok){
+      alert(`同期エラー: /exec から ${ping.status} が返却\n応答: ${pingText}\n\n` +
+            `対策: Apps Scriptのデプロイ設定を確認（実行者:自分 / アクセス:ドメイン内の全員）`);
+      return;
+    }
+    // "ok" 以外でも続行は可能だが、参考として表示
+    if(pingText.trim().toLowerCase()!=="ok"){
+      // 参考表示（止めない）
+      console.log("PING response:", pingText);
+    }
+
+    // 2) 本送信（プリフライト回避のため text/plain で送る）
+    const body = JSON.stringify({ txs });
+    const res = await fetchWithTimeout(url, {
       method: "POST",
-      headers: {"Content-Type":"text/plain"}, // ← application/jsonをやめる
-      body: JSON.stringify({ txs })
-    });
-    const text = await res.text();           // 返答をそのまま表示
-    alert(res.ok ? `同期完了\n${text}` : `同期失敗(${res.status})\n${text}`);
+      headers: { "Content-Type": "text/plain" },
+      body
+    }, 15000);
+
+    const text = await res.text().catch(()=>"(no body)");
+    if(res.ok){
+      alert(`同期完了\nHTTP ${res.status}\n${text}`);
+    }else{
+      alert(`同期失敗\nHTTP ${res.status}\n${text}\n\n` +
+            `対策メモ:\n- デプロイURLが /exec か\n- デプロイ権限（ドメイン内の全員）\n- シートにバインドしたGASか\n- 一度レジ打ちして txs が空でないか`);
+    }
   }catch(e){
-    alert("同期エラー: "+ e.message);
+    alert("同期エラー: " + e.message + "\n\n" +
+          "通信がブロックされた可能性があります（学内ネット/アカウント確認）。");
   }
 });
+// ---- 置き換えここまで ----
+</script>
 
 // new item
 els.newItemBtn.addEventListener("click",()=>{
