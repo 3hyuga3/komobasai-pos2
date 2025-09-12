@@ -425,13 +425,21 @@ els.importItems.addEventListener("change",e=>{
   };
   reader.readAsText(f);
 });
-els.syncGoogle.addEventListener("click",async()=>{
-  const url=prompt("（学内限定）Apps ScriptのWebhook URLを入力");
-  if(!url) return;
+// 学内GASへ同期（プリフライト回避・エラーメッセージ可視化）
+els.syncGoogle.addEventListener("click", async ()=>{
+  const url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（/exec）");
+  if (!url) return;
   try{
-    const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({txs})});
-    alert(res.ok?"同期完了":"同期失敗");
-  }catch(e){ alert("同期エラー: "+e.message); }
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type":"text/plain"}, // ← application/jsonをやめる
+      body: JSON.stringify({ txs })
+    });
+    const text = await res.text();           // 返答をそのまま表示
+    alert(res.ok ? `同期完了\n${text}` : `同期失敗(${res.status})\n${text}`);
+  }catch(e){
+    alert("同期エラー: "+ e.message);
+  }
 });
 
 // new item
