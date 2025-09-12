@@ -5,11 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>駒場祭POS（完全版）</title>
 <style>
-  :root{
-    --bg:#fafafa;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111;--ink2:#0a0a0a;
-  }
+  :root{--bg:#fafafa;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111}
   *{box-sizing:border-box;font-family:system-ui,-apple-system,"Noto Sans JP",Segoe UI,Roboto,Helvetica,Arial}
-  html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--ink)}
   header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--border);padding:8px 12px}
   main{padding:10px;max-width:1100px;margin:0 auto;padding-bottom:100px}
@@ -17,8 +14,9 @@
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   input,select,button{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:#fff}
   button{cursor:pointer}
-  button.primary{background:var(--ink);color:#fff;border-color:#000}
+  button.primary{background:#111;color:#fff;border-color:#000}
   button.ghost{background:#f3f4f6}
+  button.danger{background:#fff;border-color:#ef4444;color:#b91c1c}
   .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-top:12px}
   .muted{color:var(--muted);font-size:12px}
   .tag{border:1px solid var(--border);border-radius:999px;padding:0 8px;font-size:11px}
@@ -26,14 +24,11 @@
   @media(min-width:680px){.grid{grid-template-columns:repeat(3,1fr)}}
   @media(min-width:980px){.grid{grid-template-columns:repeat(4,1fr)}}
   .tile{display:flex;flex-direction:column;gap:6px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;align-items:flex-start}
-  .tile.sm{padding:8px}
   .tile:disabled{opacity:.5}
   .name{font-weight:700}
   .footbar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--border);padding:8px 12px;z-index:10}
   .footbar .row{justify-content:space-between}
   .list-row{display:flex;gap:8px;align-items:center;justify-content:space-between;border-bottom:1px solid #eee;padding:6px 0}
-  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:72px;background:#111;color:#fff;padding:10px 14px;border-radius:10px;opacity:0;transition:opacity .2s,transform .2s;z-index:20}
-  .toast.show{opacity:1;transform:translate(-50%,-6px)}
   table{width:100%;border-collapse:collapse}
   th,td{padding:6px;border-bottom:1px solid #eee;text-align:right;font-size:13px}
   th:first-child,td:first-child{text-align:left}
@@ -51,13 +46,7 @@
   </div>
   <div class="row" style="margin-top:6px">
     <input id="search" placeholder="商品検索 (例: じゃが / SKU)" style="min-width:180px;flex:1">
-    <select id="tileSize">
-      <option value="lg">タイル大</option>
-      <option value="sm">タイル小</option>
-    </select>
-    <label class="row" style="gap:6px">
-      <input id="autoClear" type="checkbox" checked> <span class="muted">会計後にカートを自動クリア</span>
-    </label>
+    <select id="catFilter"><option value="">すべてのカテゴリ</option></select>
   </div>
 </header>
 
@@ -76,6 +65,7 @@
       <input id="newPrice" inputmode="numeric" placeholder="単価(円)" style="max-width:120px">
       <input id="newStock" inputmode="numeric" placeholder="在庫" style="max-width:120px">
       <input id="newSku" placeholder="SKU" style="max-width:140px">
+      <input id="newCat" placeholder="カテゴリ (例: フード)" style="max-width:140px">
       <button id="addItem" class="primary">追加</button>
     </div>
     <div id="catalog" class="grid" style="margin-top:8px"></div>
@@ -91,14 +81,12 @@
       <label class="muted">注文全体の割引（％）</label>
       <input id="discountPct" inputmode="numeric" placeholder="例: 10" style="max-width:120px">
     </div>
-    <div class="muted" style="margin-top:6px">
-      ※ 行割引（各商品）→ 注文全体割引（会計時）の順に適用されます
-    </div>
+    <div class="muted" style="margin-top:6px">※ 行割引 → 会計割引の順で適用</div>
   </section>
 
-  <!-- 本日サマリ -->
+  <!-- サマリ（今日） -->
   <section class="card">
-    <div style="font-weight:600">本日サマリ <span id="todayS"></span></div>
+    <div style="font-weight:600">今日のサマリ <span id="todayS"></span></div>
     <div id="summary"></div>
   </section>
 
@@ -106,13 +94,11 @@
   <section class="card">
     <div class="row" style="justify-content:space-between">
       <div style="font-weight:600">商品別会計（今日）</div>
-      <div class="row">
-        <button id="exportItemAgg">商品別CSV</button>
-      </div>
+      <div class="row"><button id="exportItemAgg">商品別CSV</button></div>
     </div>
     <div style="overflow:auto">
       <table>
-        <thead><tr><th>商品</th><th>売上数量</th><th>売上金額</th><th>平均単価</th><th>在庫</th></tr></thead>
+        <thead><tr><th>商品</th><th>カテゴリ</th><th>売上数量</th><th>売上金額</th><th>平均単価</th><th>在庫</th></tr></thead>
         <tbody id="itemAggTable"></tbody>
       </table>
     </div>
@@ -128,7 +114,7 @@
       <button id="syncGoogle">Googleシート同期</button>
     </div>
     <div class="muted" style="margin-top:6px">
-      商品CSV列：<code>name,price,stock,sku,dPct,dYen</code>（割引は任意）
+      商品CSV列：<code>name,price,stock,sku,cat,dPct,dYen</code>
     </div>
   </section>
 </main>
@@ -138,11 +124,8 @@
   <div class="row">
     <div class="row" style="gap:12px">
       <span class="muted">支払い</span>
-      <select id="pay">
-        <option>現金</option><option>QRコード</option><option>カード</option><option>その他</option>
-      </select>
-      <span class="muted">合計</span>
-      <span id="cartTotal" style="font-weight:800;font-size:18px">¥0</span>
+      <select id="pay"><option>現金</option><option>QRコード</option><option>カード</option><option>その他</option></select>
+      <span class="muted">合計</span><span id="cartTotal" style="font-weight:800;font-size:18px">¥0</span>
     </div>
     <div class="row">
       <button id="commit" class="primary">販売記録</button>
@@ -152,170 +135,157 @@
   </div>
 </div>
 
-<div id="toast" class="toast"></div>
-
 <script>
-/* ========= 基本ユーティリティ ========= */
-const LS = {
-  items:"komaba_pos_items_v8",
-  txs:"komaba_pos_txs_v8",
-  cashier:"komaba_pos_cashier",
-  goal:"komaba_pos_goal",
-  lowStock:"komaba_pos_lowstock",
-  tile:"komaba_pos_tilesize",
-  autoClear:"komaba_pos_autoclear"
-};
-const els = {
-  catalog:document.getElementById("catalog"),
-  search:document.getElementById("search"),
-  tileSize:document.getElementById("tileSize"),
-  autoClear:document.getElementById("autoClear"),
-  cartLines:document.getElementById("cartLines"),
-  cartTotal:document.getElementById("cartTotal"),
-  pay:document.getElementById("pay"),
-  commit:document.getElementById("commit"),
-  refund:document.getElementById("refund"),
-  clear:document.getElementById("clear"),
-  discountYen:document.getElementById("discountYen"),
-  discountPct:document.getElementById("discountPct"),
-  goal:document.getElementById("goal"),
-  lowStock:document.getElementById("lowStock"),
-  cashier:document.getElementById("cashier"),
-  summary:document.getElementById("summary"),
-  todayS:document.getElementById("todayS"),
-  importItems:document.getElementById("importItems"),
-  exportItems:document.getElementById("exportItems"),
-  exportTx:document.getElementById("exportTx"),
-  syncGoogle:document.getElementById("syncGoogle"),
-  itemAggTable:document.getElementById("itemAggTable"),
-  newItemBtn:document.getElementById("newItemBtn"),
-  newForm:document.getElementById("newForm"),
-  newName:document.getElementById("newName"),
-  newPrice:document.getElementById("newPrice"),
-  newStock:document.getElementById("newStock"),
-  newSku:document.getElementById("newSku"),
-  addItem:document.getElementById("addItem"),
-  resetDemo:document.getElementById("resetDemo"),
-  toast:document.getElementById("toast")
-};
+// ===== helpers & storage =====
+const LS={items:"komaba_pos_items_cat_v3",txs:"komaba_pos_txs_cat_v3",cashier:"komaba_pos_cashier",goal:"komaba_pos_goal",lowStock:"komaba_pos_lowstock"};
 function read(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function jpy(n){return "¥"+(Math.round(n)||0).toLocaleString("ja-JP")}
-function esc(s){return String(s).replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
-function toast(msg){els.toast.textContent=msg;els.toast.classList.add("show");setTimeout(()=>els.toast.classList.remove("show"),1400)}
+function esc(s){return String(s).replace(/[&<>\"']/g,m=>({"&":"&amp;","<":"&lt;"," >":"&gt;","\"":"&quot;"}[m]))}
+const els={
+  catalog:document.getElementById("catalog"),search:document.getElementById("search"),catFilter:document.getElementById("catFilter"),
+  cartLines:document.getElementById("cartLines"),cartTotal:document.getElementById("cartTotal"),
+  pay:document.getElementById("pay"),commit:document.getElementById("commit"),refund:document.getElementById("refund"),clear:document.getElementById("clear"),
+  discountYen:document.getElementById("discountYen"),discountPct:document.getElementById("discountPct"),
+  goal:document.getElementById("goal"),lowStock:document.getElementById("lowStock"),cashier:document.getElementById("cashier"),
+  newItemBtn:document.getElementById("newItemBtn"),newForm:document.getElementById("newForm"),newName:document.getElementById("newName"),newPrice:document.getElementById("newPrice"),newStock:document.getElementById("newStock"),newSku:document.getElementById("newSku"),newCat:document.getElementById("newCat"),addItem:document.getElementById("addItem"),resetDemo:document.getElementById("resetDemo"),
+  summary:document.getElementById("summary"),todayS:document.getElementById("todayS"),itemAggTable:document.getElementById("itemAggTable"),
+  importItems:document.getElementById("importItems"),exportItems:document.getElementById("exportItems"),exportTx:document.getElementById("exportTx"),syncGoogle:document.getElementById("syncGoogle")
+};
 
-/* ========= 状態 ========= */
-let items = read(LS.items,[
-  {id:crypto.randomUUID(),name:"じゃがバター",price:400,stock:200,sku:"JGBTR",dPct:0,dYen:0},
-  {id:crypto.randomUUID(),name:"塩バター（トッピング）",price:50,stock:300,sku:"TOP-SALT",dPct:0,dYen:0},
-  {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",dPct:0,dYen:0},
-  {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",dPct:0,dYen:0}
+// state
+let items=read(LS.items,[
+  {id:crypto.randomUUID(),name:"じゃがバター",price:400,stock:200,sku:"JGBTR",cat:"フード",dPct:0,dYen:0},
+  {id:crypto.randomUUID(),name:"塩バター（トッピング）",price:50,stock:300,sku:"TOP-SALT",cat:"フード",dPct:0,dYen:0},
+  {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",cat:"フード",dPct:0,dYen:0},
+  {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",cat:"ドリンク",dPct:0,dYen:0}
 ]);
-let txs = read(LS.txs,[]);
-let cart = [];
+let txs=read(LS.txs,[]);
+let cart=[];
 
-els.cashier.value = read(LS.cashier,"");
-els.goal.value = read(LS.goal,"");
-els.lowStock.value = read(LS.lowStock,"");
-els.tileSize.value = read(LS.tile,"lg") || "lg";
-els.autoClear.checked = read(LS.autoClear,true);
-
-/* ========= 入力保持 ========= */
+// inputs restore
+els.cashier.value=read(LS.cashier,""); els.goal.value=read(LS.goal,""); els.lowStock.value=read(LS.lowStock,"");
 els.cashier.addEventListener("input",()=>write(LS.cashier,els.cashier.value));
 els.goal.addEventListener("input",()=>write(LS.goal,(els.goal.value||"").replace(/[^0-9]/g,"")));
 els.lowStock.addEventListener("input",()=>write(LS.lowStock,(els.lowStock.value||"").replace(/[^0-9]/g,"")));
-els.tileSize.addEventListener("change",()=>{write(LS.tile,els.tileSize.value);renderCatalog()});
-els.autoClear.addEventListener("change",()=>write(LS.autoClear,els.autoClear.checked));
 els.search.addEventListener("input",renderCatalog);
+els.catFilter.addEventListener("change",renderCatalog);
 
-/* ========= カタログ ========= */
+// catalog
+function refreshCatOptions(){
+  const cats=[...new Set(items.map(i=>i.cat).filter(Boolean))];
+  els.catFilter.innerHTML='<option value="">すべてのカテゴリ</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');
+}
 function renderCatalog(){
-  const q = (els.search.value||"").trim().toLowerCase();
-  const threshold = Number(els.lowStock.value||0);
-  els.catalog.innerHTML = "";
-  items
-  .filter(it=>{
+  const q=(els.search.value||"").trim().toLowerCase();
+  const catSel=els.catFilter.value||"";
+  const threshold=Number(els.lowStock.value||0);
+  els.catalog.innerHTML="";
+  items.filter(it=>{
+    if(catSel && it.cat!==catSel) return false;
     if(!q) return true;
     const hay=(it.name+" "+(it.sku||"")).toLowerCase();
     return hay.includes(q);
-  })
-  .forEach((it,idx)=>{
-    const soldOut = it.stock<=0;
-    const low = !soldOut && threshold>0 && it.stock<=threshold;
-    const tile = document.createElement("button");
-    tile.className = "tile" + (els.tileSize.value==="sm"?" sm":"");
-    tile.disabled = soldOut;
-    tile.innerHTML = `
+  }).forEach((it,idx)=>{
+    const soldOut=it.stock<=0; const low=!soldOut&&threshold>0&&it.stock<=threshold;
+    const tile=document.createElement("div"); tile.className="tile"; tile.style.opacity=soldOut?0.6:1;
+    tile.innerHTML=`
       <div class="name">${esc(it.name)}</div>
       <div class="muted">${jpy(it.price)} / 在庫:${it.stock}
         ${low?'<span class="tag" style="margin-left:6px;border-color:#f59e0b;color:#b45309">残りわずか</span>':''}
         ${soldOut?'<span class="tag" style="margin-left:6px;border-color:#ef4444;color:#ef4444">売切れ</span>':''}
       </div>
-      ${it.sku?'<div class="muted" style="font-size:11px">SKU:'+esc(it.sku)+'</div>':""}
+      <div class="muted" style="font-size:11px">
+        ${(it.cat?('カテゴリ:'+esc(it.cat)+'　'):'')}${it.sku?('SKU:'+esc(it.sku)):""}
+      </div>
       <div class="row" style="margin-top:6px">
-        <button class="primary" data-add="${it.id}">＋ 追加</button>
+        <button class="primary" data-add="${it.id}" ${soldOut?'disabled':''}>＋ 追加</button>
         <span class="muted">デフォ割</span>
         <input class="small" style="max-width:80px" inputmode="numeric" placeholder="% 例:10" data-dpct="${it.id}" value="${it.dPct||''}">
         <input class="small" style="max-width:100px" inputmode="numeric" placeholder="円 例:50" data-dyen="${it.id}" value="${it.dYen||''}">
-        <button class="ghost" data-preset="${it.id}" title="学割10%">学割10%</button>
-      </div>
-    `;
-    if(!soldOut){
-      tile.querySelector(`[data-add="${it.id}"]`).addEventListener("click",()=>addToCart(it.id));
-    }
-    tile.querySelector(`[data-dpct="${it.id}"]`).addEventListener("input",e=>{
-      items[idx].dPct = Number((e.target.value||"").replace(/[^0-9]/g,"")); write(LS.items,items);
-    });
-    tile.querySelector(`[data-dyen="${it.id}"]`).addEventListener("input",e=>{
-      items[idx].dYen = Number((e.target.value||"").replace(/[^0-9]/g,"")); write(LS.items,items);
-    });
-    tile.querySelector(`[data-preset="${it.id}"]`).addEventListener("click",()=>{
-      items[idx].dPct = 10; write(LS.items,items); renderCatalog();
-    });
+        <button data-edit="${it.id}" title="この商品を編集">編集</button>
+        <button class="danger" data-del="${it.id}" title="この商品を削除">削除</button>
+      </div>`;
+    if(!soldOut) tile.querySelector(`[data-add="${it.id}"]`).addEventListener("click",()=>addToCart(it.id));
+    tile.querySelector(`[data-dpct="${it.id}"]`).addEventListener("input",e=>{items[idx].dPct=Number((e.target.value||"").replace(/[^0-9]/g,""));write(LS.items,items)});
+    tile.querySelector(`[data-dyen="${it.id}"]`).addEventListener("input",e=>{items[idx].dYen=Number((e.target.value||"").replace(/[^0-9]/g,""));write(LS.items,items)});
+    tile.querySelector(`[data-edit="${it.id}"]`).addEventListener("click",()=>editItem(it.id));
+    tile.querySelector(`[data-del="${it.id}"]`).addEventListener("click",()=>deleteItem(it.id));
     els.catalog.appendChild(tile);
   });
 }
 
-/* ========= カート ========= */
-function addToCart(id){
-  const it = items.find(i=>i.id===id); if(!it) return;
-  const ex = cart.find(l=>l.id===id);
-  if(ex){ ex.qty += 1; }
-  else {
-    cart.push({
-      id:it.id, name:it.name, price:it.price, sku:it.sku||"", qty:1,
-      lineDiscPct:Number(it.dPct||0), lineDiscYen:Number(it.dYen||0)
-    });
-  }
-  renderCart(); toast(`${it.name} を追加`);
+// edit / delete product
+function editItem(id){
+  const i = items.findIndex(x=>x.id===id);
+  if(i<0) return;
+  const it = items[i];
+  const name = prompt("商品名", it.name);
+  if(name===null) return;
+  const priceStr = prompt("単価(円)", String(it.price));
+  if(priceStr===null) return;
+  const stockStr = prompt("在庫", String(it.stock));
+  if(stockStr===null) return;
+  const sku = prompt("SKU", it.sku||"");
+  if(sku===null) return;
+  const cat = prompt("カテゴリ（例: フード/ドリンク）", it.cat||"");
+  if(cat===null) return;
+
+  const price = Number(String(priceStr).replace(/[^0-9]/g,""));
+  const stock = Number(String(stockStr).replace(/[^0-9]/g,""));
+  if(isNaN(price) || isNaN(stock)){ alert("価格または在庫が不正です"); return; }
+
+  items[i] = {...it, name, price, stock, sku, cat};
+  cart = cart.map(l => l.id===id ? {...l, name, price, sku, cat} : l);
+
+  write(LS.items, items);
+  renderCatalog(); renderCart(); renderItemAgg();
 }
-function lineAmount(l){ return l.price*l.qty }
+function deleteItem(id){
+  const it=items.find(i=>i.id===id);
+  if(!it) return;
+  if(!confirm(`『${it.name}』を削除しますか？\n※ 在庫や過去データには影響しません（商品一覧から消えるだけ）`)) return;
+  items = items.filter(i=>i.id!==id);
+  write(LS.items,items);
+  cart = cart.filter(l=>l.id!==id);
+  renderCatalog(); renderCart(); renderItemAgg();
+}
+
+// cart & totals
+function addToCart(id){
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const ex=cart.find(l=>l.id===id);
+  if(ex){ ex.qty += 1; }
+  else{
+    cart.push({id:it.id,name:it.name,price:it.price,sku:it.sku||"",cat:it.cat||"",qty:1,lineDiscPct:Number(it.dPct||0),lineDiscYen:Number(it.dYen||0)});
+  }
+  renderCart();
+}
+function lineAmount(l){return l.price*l.qty}
 function lineDiscountedTotal(l){
-  const base = lineAmount(l);
-  const byPct = Math.floor(base * (Math.max(0,Math.min(100, Number(l.lineDiscPct)||0))/100));
-  const byYen = Math.max(0, Number(l.lineDiscYen)||0);
-  const disc = Math.min(base, byPct + byYen);
-  return base - disc;
+  const base=lineAmount(l);
+  const byPct=Math.floor(base*(Math.max(0,Math.min(100,Number(l.lineDiscPct)||0))/100));
+  const byYen=Math.max(0,Number(l.lineDiscYen)||0);
+  const disc=Math.min(base,byPct+byYen);
+  return base-disc;
 }
 function totals(){
-  const subAfterLine = cart.reduce((s,l)=> s + lineDiscountedTotal(l), 0);
-  const orderPct = Math.max(0, Math.min(100, Number((els.discountPct?.value||"").replace(/[^0-9]/g,""))||0));
-  const orderYen = Math.max(0, Number((els.discountYen?.value||"").replace(/[^0-9]/g,""))||0);
-  const orderDisc = Math.min(subAfterLine, Math.floor(subAfterLine*orderPct/100)+orderYen);
-  const total = Math.max(0, subAfterLine - orderDisc);
-  return {subAfterLine, orderDisc, total, orderPct, orderYen};
+  const subAfterLine=cart.reduce((s,l)=>s+lineDiscountedTotal(l),0);
+  const orderPct=Math.max(0,Math.min(100,Number((els.discountPct?.value||"").replace(/[^0-9]/g,""))||0));
+  const orderYen=Math.max(0,Number((els.discountYen?.value||"").replace(/[^0-9]/g,""))||0);
+  const orderDisc=Math.min(subAfterLine,Math.floor(subAfterLine*orderPct/100)+orderYen);
+  const total=Math.max(0,subAfterLine-orderDisc);
+  return {subAfterLine,orderDisc,total};
 }
 function renderCart(){
   els.cartLines.innerHTML="";
   cart.forEach((l,i)=>{
-    const row = document.createElement("div");
-    row.className = "list-row";
-    row.innerHTML = `
-      <div><b>${esc(l.name)}</b> <span class="muted">(${jpy(l.price)})</span></div>
+    const row=document.createElement("div");
+    row.className="list-row";
+    row.innerHTML=`
+      <div><b>${esc(l.name)}</b> <span class="muted">(${jpy(l.price)})</span> <span class="muted">[${esc(l.cat||"-")}]</span></div>
       <div class="row">
-        <button data-dec="${i}">−</button>
-        <span>${l.qty}</span>
-        <button data-inc="${i}">＋</button>
+        <button data-dec="${i}">−</button><span>${l.qty}</span><button data-inc="${i}">＋</button>
         <button data-del="${i}">削除</button>
       </div>
       <div class="row" style="width:100%">
@@ -323,132 +293,80 @@ function renderCart(){
         <input data-pct="${i}" inputmode="numeric" placeholder="% 例:10" style="max-width:90px" value="${l.lineDiscPct||""}">
         <input data-yen="${i}" inputmode="numeric" placeholder="円 例:50" style="max-width:110px" value="${l.lineDiscYen||""}">
         <span style="margin-left:auto">小計: <b>${jpy(lineDiscountedTotal(l))}</b></span>
-      </div>
-    `;
+      </div>`;
     els.cartLines.appendChild(row);
   });
-  // bind
   els.cartLines.querySelectorAll("[data-inc]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.inc;cart[i].qty++;renderCart()}));
   els.cartLines.querySelectorAll("[data-dec]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.dec;cart[i].qty--;if(cart[i].qty<=0)cart.splice(i,1);renderCart()}));
   els.cartLines.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.del;cart.splice(i,1);renderCart()}));
-  els.cartLines.querySelectorAll("[data-pct]").forEach(inp=>inp.addEventListener("input",()=>{const i=+inp.dataset.pct;cart[i].lineDiscPct = Number((inp.value||"").replace(/[^0-9]/g,"")); renderCart()}));
-  els.cartLines.querySelectorAll("[data-yen]").forEach(inp=>inp.addEventListener("input",()=>{const i=+inp.dataset.yen;cart[i].lineDiscYen = Number((inp.value||"").replace(/[^0-9]/g,"")); renderCart()}));
-  els.cartTotal.textContent = jpy(totals().total);
+  els.cartTotal.textContent=jpy(totals().total);
 }
-function clearCart(){ cart=[]; renderCart(); }
+function clearCart(){cart=[];renderCart()}
 
-/* ========= 販売記録 / 返金 ========= */
-function checkStockOk(isRefund){
-  if(isRefund) return true;
-  const insufficient = cart.filter(l=>{
-    const it=items.find(i=>i.id===l.id);
-    return it && l.qty>it.stock;
-  });
-  if(insufficient.length){
-    alert("在庫不足: "+insufficient.map(l=>l.name).join(", "));
-    return false;
-  }
-  return true;
-}
+// commit/refund
 function commit(opts={refund:false}){
   if(!cart.length) return alert("カートが空です");
-  if(!checkStockOk(opts.refund)) return;
-  const t = totals();
-  const tx = {
-    id: Date.now()+""+Math.random().toString(36).slice(2),
-    ts: Date.now(),
-    lines: JSON.parse(JSON.stringify(cart)),
-    payment: els.pay.value,
-    cashier: els.cashier.value || "",
-    subtotal_after_line: t.subAfterLine,
-    order_discount: opts.refund ? 0 : t.orderDisc,
-    order_discount_pct: opts.refund ? 0 : Number((els.discountPct?.value||"").replace(/[^0-9]/g,""))||0,
-    order_discount_yen: opts.refund ? 0 : Number((els.discountYen?.value||"").replace(/[^0-9]/g,""))||0,
-    total: (t.subAfterLine - (opts.refund?0:t.orderDisc)) * (opts.refund?-1:1),
-    refund: !!opts.refund,
-    void: false
-  };
-  // 在庫更新
   if(!opts.refund){
-    items = items.map(it=>{
-      const l = cart.find(x=>x.id===it.id);
-      return l ? {...it, stock: Math.max(0, it.stock - l.qty)} : it;
-    });
-  }else{
-    items = items.map(it=>{
-      const l = cart.find(x=>x.id===it.id);
-      return l ? {...it, stock: it.stock + l.qty} : it;
-    });
+    const insufficient=cart.filter(l=>{const it=items.find(i=>i.id===l.id);return it && l.qty>it.stock});
+    if(insufficient.length){alert("在庫不足: "+insufficient.map(l=>l.name).join(", "));return;}
   }
-  write(LS.items,items);
-  txs = [tx, ...txs]; write(LS.txs,txs);
-
-  if(els.autoClear.checked){ clearCart(); }
-  els.discountPct.value=""; els.discountYen.value="";
-  renderCatalog(); renderSummary(); renderItemAgg();
-  toast(opts.refund?"返金を記録しました":"販売を記録しました");
+  const t=totals();
+  const tx={id:Date.now()+""+Math.random().toString(36).slice(2),ts:Date.now(),lines:JSON.parse(JSON.stringify(cart)),payment:els.pay.value,cashier:els.cashier.value||"",subtotal_after_line:t.subAfterLine,order_discount:opts.refund?0:t.orderDisc,order_discount_pct:opts.refund?0:Number((els.discountPct?.value||"").replace(/[^0-9]/g,""))||0,order_discount_yen:opts.refund?0:Number((els.discountYen?.value||"").replace(/[^0-9]/g,""))||0,total:(t.subAfterLine-(opts.refund?0:t.orderDisc))*(opts.refund?-1:1),refund:!!opts.refund,void:false};
+  if(!opts.refund){items=items.map(it=>{const l=cart.find(x=>x.id===it.id);return l?{...it,stock:Math.max(0,it.stock-l.qty)}:it})}
+  else{items=items.map(it=>{const l=cart.find(x=>x.id===it.id);return l?{...it,stock:it.stock+l.qty}:it})}
+  write(LS.items,items); txs=[tx,...txs]; write(LS.txs,txs);
+  clearCart(); els.discountPct.value=""; els.discountYen.value="";
+  renderCatalog(); renderSummary(); renderItemAgg(); refreshCatOptions();
 }
 els.commit.addEventListener("click",()=>commit());
 els.refund.addEventListener("click",()=>commit({refund:true}));
 els.clear.addEventListener("click",clearCart);
 
-/* ========= サマリ ========= */
+// summary today
 function renderSummary(){
-  const today = new Date().toLocaleDateString("ja-JP");
-  els.todayS.textContent = today;
+  const today=new Date().toLocaleDateString("ja-JP"); els.todayS.textContent=today;
   const byPay=new Map(); let gross=0,count=0;
   for(const tx of txs){
-    const d=new Date(tx.ts).toLocaleDateString("ja-JP");
-    if(d!==today || tx.void) continue;
-    gross += tx.total; count++;
-    byPay.set(tx.payment,(byPay.get(tx.payment)||0)+tx.total);
+    const d=new Date(tx.ts).toLocaleDateString("ja-JP"); if(d!==today||tx.void) continue;
+    gross+=tx.total; count++; byPay.set(tx.payment,(byPay.get(tx.payment)||0)+tx.total);
   }
   els.summary.innerHTML="";
-  for(const [k,v] of byPay.entries()){
-    const line=document.createElement("div");
-    line.className="row"; line.style.justifyContent="space-between";
-    line.innerHTML=`<span>${k}</span><span>${jpy(v)}</span>`;
-    els.summary.appendChild(line);
+  for(const [k,v]of byPay.entries()){
+    const line=document.createElement("div"); line.className="row"; line.style.justifyContent="space-between";
+    line.innerHTML=`<span>${k}</span><span>${jpy(v)}</span>`; els.summary.appendChild(line);
   }
   const t1=document.createElement("div"); t1.style.display="flex"; t1.style.justifyContent="space-between"; t1.style.fontWeight="700";
   t1.innerHTML=`<span>合計</span><span>${jpy(gross)}</span>`; els.summary.appendChild(t1);
-
-  // 売上目標バー
-  const goal = Math.max(0, Number((els.goal?.value||"").replace(/[^0-9]/g,"")) || 0);
+  const goal=Math.max(0,Number((els.goal?.value||"").replace(/[^0-9]/g,""))||0);
   if(goal>0){
-    const ratio = Math.min(1, gross/goal);
+    const ratio=Math.min(1,gross/goal);
     const bar=document.createElement("div"); bar.style.marginTop="8px";
-    bar.innerHTML = `
-      <div class="muted" style="display:flex;justify-content:space-between">
-        <span>売上目標:${jpy(goal)}</span><span>${Math.floor(ratio*100)}%</span>
-      </div>
-      <div style="height:10px;border:1px solid #ccc;border-radius:999px;overflow:hidden">
-        <div style="height:100%;width:${ratio*100}%;background:${ratio<1?'#111':'#16a34a'}"></div>
-      </div>`;
+    bar.innerHTML=`<div class="muted" style="display:flex;justify-content:space-between"><span>売上目標:${jpy(goal)}</span><span>${Math.floor(ratio*100)}%</span></div>
+      <div style="height:10px;border:1px solid #ccc;border-radius:999px;overflow:hidden"><div style="height:100%;width:${ratio*100}%;background:#111"></div></div>`;
     els.summary.appendChild(bar);
   }
 }
 
-/* ========= 商品別会計（今日） ========= */
+// per-item accounting today
 function buildItemAggToday(){
   const today=new Date().toLocaleDateString("ja-JP");
-  const map = new Map();
-  for(const it of items){ map.set(it.id,{id:it.id,name:it.name,qty:0,amount:0,stock:it.stock}); }
+  const map=new Map();
+  for(const it of items){ map.set(it.id,{id:it.id,name:it.name,cat:it.cat||"",qty:0,amount:0,stock:it.stock}); }
   for(const tx of txs){
-    const d=new Date(tx.ts).toLocaleDateString("ja-JP"); if(d!==today || tx.void) continue;
-    const lineTotals = tx.lines.map(l=>{
+    const d=new Date(tx.ts).toLocaleDateString("ja-JP"); if(d!==today||tx.void) continue;
+    const lineTotals=tx.lines.map(l=>{
       const base=l.price*l.qty;
       const pct=Number(l.lineDiscPct||0), yen=Number(l.lineDiscYen||0);
-      const lineDisc=Math.min(base, Math.floor(base*pct/100)+yen);
-      return { id:l.id, qty:l.qty*(tx.refund?-1:1), subtotal: base-lineDisc };
+      const lineDisc=Math.min(base,Math.floor(base*pct/100)+yen);
+      return {id:l.id,qty:l.qty*(tx.refund?-1:1),subtotal:base-lineDisc};
     });
     const subAfterLine=lineTotals.reduce((s,x)=>s+x.subtotal,0);
     const orderDisc=(tx.order_discount||0)*(tx.refund?-1:1);
     for(const lt of lineTotals){
-      const share=subAfterLine>0? orderDisc*(lt.subtotal/subAfterLine):0;
+      const share=subAfterLine>0?orderDisc*(lt.subtotal/subAfterLine):0;
       const net=lt.subtotal-share;
-      const rec=map.get(lt.id) || {id:lt.id,name:lt.id,qty:0,amount:0,stock:0};
-      rec.qty += lt.qty; rec.amount += net; map.set(lt.id,rec);
+      const rec=map.get(lt.id)||{id:lt.id,name:lt.id,cat:"",qty:0,amount:0,stock:0};
+      rec.qty+=lt.qty; rec.amount+=net; map.set(lt.id,rec);
     }
   }
   return Array.from(map.values());
@@ -458,64 +376,57 @@ function renderItemAgg(){
   rows.forEach(r=>{
     const avg=r.qty?Math.round(r.amount/r.qty):0;
     const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${esc(r.name)}</td><td>${r.qty}</td><td>${jpy(Math.round(r.amount))}</td><td>${jpy(avg)}</td><td>${r.stock}</td>`;
+    tr.innerHTML=`<td>${esc(r.name)}</td><td>${esc(r.cat||"")}</td><td>${r.qty}</td><td>${jpy(Math.round(r.amount))}</td><td>${jpy(avg)}</td><td>${r.stock}</td>`;
     els.itemAggTable.appendChild(tr);
   });
 }
 document.getElementById("exportItemAgg").addEventListener("click",()=>{
   const rows=buildItemAggToday();
-  const csv=[["item_name","qty","amount","avg_price","stock"]];
-  rows.forEach(r=>csv.push([r.name,r.qty,Math.round(r.amount),r.qty?Math.round(r.amount/r.qty):0,r.stock]));
+  const csv=[["item_name","category","qty","amount","avg_price","stock"]];
+  rows.forEach(r=>csv.push([r.name,r.cat||"",r.qty,Math.round(r.amount),r.qty?Math.round(r.amount/r.qty):0,r.stock]));
   const blob=new Blob([csv.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="item_agg_today.csv"; a.click();
 });
 
-/* ========= CSV / 連携 ========= */
+// CSV / sync
 els.exportItems.addEventListener("click",()=>{
-  const rows=[["name","price","stock","sku","dPct","dYen"]];
-  items.forEach(it=>rows.push([it.name,it.price,it.stock||0,it.sku||"",it.dPct||0,it.dYen||0]));
+  const rows=[["name","price","stock","sku","cat","dPct","dYen"]];
+  items.forEach(it=>rows.push([it.name,it.price,it.stock||0,it.sku||"",it.cat||"",it.dPct||0,it.dYen||0]));
   const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="items.csv"; a.click();
 });
 els.exportTx.addEventListener("click",()=>{
-  const rows=[["tx_id","timestamp","date_jst","payment","cashier","subtotal_after_line","order_discount","order_discount_pct","order_discount_yen","total","refund","void","line_item_id","item_name","sku","qty","unit_price","line_discount_pct","line_discount_yen","line_total"]];
+  const rows=[["tx_id","timestamp","date_jst","payment","cashier","subtotal_after_line","order_discount","order_discount_pct","order_discount_yen","total","refund","void","line_item_id","item_name","sku","category","qty","unit_price","line_discount_pct","line_discount_yen","line_total"]];
   txs.forEach(tx=>{
     tx.lines.forEach(line=>{
       const base=line.price*line.qty;
       const pct=Number(line.lineDiscPct||0), yen=Number(line.lineDiscYen||0);
-      const lineDisc=Math.min(base, Math.floor(base*pct/100)+yen);
+      const lineDisc=Math.min(base,Math.floor(base*pct/100)+yen);
       const lineTotal=base-lineDisc;
-      rows.push([
-        tx.id, new Date(tx.ts).toISOString(), new Date(tx.ts).toLocaleString("ja-JP"),
-        tx.payment, tx.cashier, tx.subtotal_after_line, tx.order_discount, tx.order_discount_pct, tx.order_discount_yen,
-        tx.total, tx.refund?1:0, tx.void?1:0,
-        line.id, line.name, line.sku||"", line.qty*(tx.refund?-1:1), line.price,
-        pct, yen, lineTotal*(tx.refund?-1:1)
-      ]);
+      rows.push([tx.id,new Date(tx.ts).toISOString(),new Date(tx.ts).toLocaleString("ja-JP"),tx.payment,tx.cashier,tx.subtotal_after_line,tx.order_discount,tx.order_discount_pct,tx.order_discount_yen,tx.total,tx.refund?1:0,tx.void?1:0,line.id,line.name,line.sku||"",line.cat||"",line.qty*(tx.refund?-1:1),line.price,pct,yen,lineTotal*(tx.refund?-1:1)]);
     });
   });
   const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="transactions.csv"; a.click();
 });
 els.importItems.addEventListener("change",e=>{
-  const f=e.target.files[0]; if(!f) return;
+  const f=e.target.files[0]; if(!f)return;
   const reader=new FileReader();
   reader.onload=ev=>{
     const text=String(ev.target.result).trim();
     const lines=text.split(/\r?\n/).filter(Boolean);
     const header=lines.shift().split(",");
-    const iName=header.indexOf("name"), iPrice=header.indexOf("price"), iStock=header.indexOf("stock"), iSku=header.indexOf("sku"), iDPct=header.indexOf("dPct"), iDYen=header.indexOf("dYen");
+    const iName=header.indexOf("name"),iPrice=header.indexOf("price"),iStock=header.indexOf("stock"),iSku=header.indexOf("sku"),iCat=header.indexOf("cat"),iDPct=header.indexOf("dPct"),iDYen=header.indexOf("dYen");
     items = lines.map(r=>{
       const c=r.split(",");
-      return {id:crypto.randomUUID(),name:c[iName],price:Number(c[iPrice]),stock:Number(c[iStock]||0),sku:c[iSku]||"",dPct:Number(c[iDPct]||0),dYen:Number(c[iDYen]||0)};
+      return {id:crypto.randomUUID(),name:c[iName],price:Number(c[iPrice]),stock:Number(c[iStock]||0),sku:c[iSku]||"",cat:(iCat>=0?c[iCat]:""),dPct:Number(c[iDPct]||0),dYen:Number(c[iDYen]||0)};
     }).filter(x=>x.name && !isNaN(x.price));
-    write(LS.items,items); renderCatalog(); renderItemAgg();
-    toast("商品CSVを読み込みました");
+    write(LS.items,items); renderCatalog(); renderItemAgg(); refreshCatOptions();
   };
   reader.readAsText(f);
 });
 els.syncGoogle.addEventListener("click",async()=>{
-  const url=prompt("Google Apps Script のWebhook URLを入力");
+  const url=prompt("（学内限定）Apps ScriptのWebhook URLを入力");
   if(!url) return;
   try{
     const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({txs})});
@@ -523,34 +434,31 @@ els.syncGoogle.addEventListener("click",async()=>{
   }catch(e){ alert("同期エラー: "+e.message); }
 });
 
-/* ========= 新規商品 ========= */
+// new item
 els.newItemBtn.addEventListener("click",()=>{
   els.newForm.style.display = els.newForm.style.display==='none'?'flex':'none';
 });
 els.addItem.addEventListener("click",()=>{
-  const name=els.newName.value.trim();
-  const price=Number((els.newPrice.value||"").replace(/[^0-9]/g,""));
-  const stock=Number((els.newStock.value||"").replace(/[^0-9]/g,""));
-  const sku=els.newSku.value.trim();
+  const name=els.newName.value.trim(); const price=Number((els.newPrice.value||"").replace(/[^0-9]/g,"")); const stock=Number((els.newStock.value||"").replace(/[^0-9]/g,"")); const sku=els.newSku.value.trim(); const cat=els.newCat.value.trim();
   if(!name){alert("商品名は必須です");return}
-  items=[{id:crypto.randomUUID(),name,price,stock,sku,dPct:0,dYen:0},...items];
+  items=[{id:crypto.randomUUID(),name,price,stock,sku,cat,dPct:0,dYen:0},...items];
   write(LS.items,items);
-  els.newName.value=els.newPrice.value=els.newStock.value=els.newSku.value="";
-  renderCatalog(); toast("商品を追加しました");
+  els.newName.value=els.newPrice.value=els.newStock.value=els.newSku.value=els.newCat.value="";
+  renderCatalog(); refreshCatOptions();
 });
 els.resetDemo.addEventListener("click",()=>{
   if(!confirm("デモ商品を入れ直します。既存の商品は上書きされます。")) return;
   items=[
-    {id:crypto.randomUUID(),name:"じゃがバター",price:400,stock:200,sku:"JGBTR",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"塩バター（トッピング）",price:50,stock:300,sku:"TOP-SALT",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",dPct:0,dYen:0}
+    {id:crypto.randomUUID(),name:"じゃがバター",price:400,stock:200,sku:"JGBTR",cat:"フード",dPct:0,dYen:0},
+    {id:crypto.randomUUID(),name:"塩バター（トッピング）",price:50,stock:300,sku:"TOP-SALT",cat:"フード",dPct:0,dYen:0},
+    {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",cat:"フード",dPct:0,dYen:0},
+    {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",cat:"ドリンク",dPct:0,dYen:0}
   ];
-  write(LS.items,items); renderCatalog(); toast("デモ商品を読み込みました");
+  write(LS.items,items); renderCatalog(); refreshCatOptions();
 });
 
-/* ========= 初期描画 ========= */
-renderCatalog(); renderCart(); renderSummary(); renderItemAgg();
+// init
+renderCatalog(); renderCart(); renderSummary(); renderItemAgg(); refreshCatOptions();
 </script>
 </body>
 </html>
