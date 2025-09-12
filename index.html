@@ -492,33 +492,64 @@ els.syncGoogle.addEventListener("click", async ()=>{
   }
 });
 // ---- 置き換えここまで ----
-</script>
+<!-- ===== ここから下を index.html の末尾に貼り付け ===== -->
+<script>
+/* ===== ここは元の index.html の JS 全体が入る区画です =====
+   ※ <script> を重ねないこと！ 末尾の </script> を必ず残すこと！ */
 
-// new item
-els.newItemBtn.addEventListener("click",()=>{
-  els.newForm.style.display = els.newForm.style.display==='none'?'flex':'none';
-});
-els.addItem.addEventListener("click",()=>{
-  const name=els.newName.value.trim(); const price=Number((els.newPrice.value||"").replace(/[^0-9]/g,"")); const stock=Number((els.newStock.value||"").replace(/[^0-9]/g,"")); const sku=els.newSku.value.trim(); const cat=els.newCat.value.trim();
-  if(!name){alert("商品名は必須です");return}
-  items=[{id:crypto.randomUUID(),name,price,stock,sku,cat,dPct:0,dYen:0},...items];
-  write(LS.items,items);
-  els.newName.value=els.newPrice.value=els.newStock.value=els.newSku.value=els.newCat.value="";
-  renderCatalog(); refreshCatOptions();
-});
-els.resetDemo.addEventListener("click",()=>{
-  if(!confirm("デモ商品を入れ直します。既存の商品は上書きされます。")) return;
-  items=[
-    {id:crypto.randomUUID(),name:"じゃがバター",price:400,stock:200,sku:"JGBTR",cat:"フード",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"塩バター（トッピング）",price:50,stock:300,sku:"TOP-SALT",cat:"フード",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",cat:"フード",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",cat:"ドリンク",dPct:0,dYen:0}
-  ];
-  write(LS.items,items); renderCatalog(); refreshCatOptions();
-});
+/*** ここにあなたの既存のJSが続いている場合は残しつつ、
+     「Googleシート同期」のイベントだけ置き換えます ***/
 
-// init
-renderCatalog(); renderCart(); renderSummary(); renderItemAgg(); refreshCatOptions();
+// ---- 同期ボタン（自己診断つき・プリフライト回避版） ----
+const LS_WEBHOOK = "komaba_pos_gas_webhook_v1";
+
+// タイムアウト付き fetch
+async function fetchWithTimeout(input, init={}, ms=15000){
+  const ctrl = new AbortController();
+  const id = setTimeout(()=>ctrl.abort(), ms);
+  try { return await fetch(input, {...init, signal: ctrl.signal}); }
+  finally { clearTimeout(id); }
+}
+
+// 既存の els.syncGoogle ... ブロックは削除して、下を使う
+els.syncGoogle.addEventListener("click", async ()=>{
+  let url = localStorage.getItem(LS_WEBHOOK) || "";
+  url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（必ず /exec）", url);
+  if (!url) return;
+  localStorage.setItem(LS_WEBHOOK, url);
+
+  try{
+    // 1) /exec に GET（"ok" 期待）で生存確認
+    let ping;
+    try{
+      ping = await fetchWithTimeout(url, {method:"GET", cache:"no-store"}, 8000);
+    }catch(e){
+      alert("同期エラー: /exec に接続できません\n" + e.message +
+            "\nURLが正しいか、学内アカウントでログイン中か確認してください。");
+      return;
+    }
+    const pingText = await ping.text().catch(()=>"(no body)");
+    if(!ping.ok){
+      alert(`同期エラー: /exec 応答 ${ping.status}\n${pingText}\n\n`+
+            `対策: GASのデプロイ設定（実行:自分 / アクセス:ドメイン内の全員）`);
+      return;
+    }
+
+    // 2) 本送信（text/plain でプリフライト回避）
+    const res = await fetchWithTimeout(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ txs })
+    }, 15000);
+
+    const text = await res.text().catch(()=>"(no body)");
+    alert(res.ok ? `同期完了\nHTTP ${res.status}\n${text}`
+                 : `同期失敗\nHTTP ${res.status}\n${text}`);
+  }catch(e){
+    alert("同期エラー: " + e.message);
+  }
+});
+/* ====== 既存のJSの最後はここで終わり ===== */
 </script>
 </body>
 </html>
