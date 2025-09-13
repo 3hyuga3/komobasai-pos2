@@ -3,35 +3,43 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>駒場祭POS（ツケ相手 別枠・全部盛り 完全版）</title>
+<title>駒場祭POS（完全版フル機能）</title>
 <style>
-  :root{--bg:#fafafa;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111}
+  :root{--bg:#fafafa;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111;--accent:#111}
+  [data-theme="dark"]{--bg:#0b0f14;--card:#0f141a;--border:#1f2937;--muted:#a3a3a3;--ink:#f8fafc;--accent:#36a3ff}
   *{box-sizing:border-box;font-family:system-ui,-apple-system,"Noto Sans JP",Segoe UI,Roboto,Helvetica,Arial}
   body{margin:0;background:var(--bg);color:var(--ink)}
-  header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--border);padding:8px 12px}
-  main{padding:10px;max-width:1100px;margin:0 auto;padding-bottom:160px}
+  header{position:sticky;top:0;z-index:6;background:var(--card);border-bottom:1px solid var(--border);padding:8px 12px}
+  main{padding:10px;max-width:1200px;margin:0 auto;padding-bottom:180px}
   h1{margin:0;font-size:18px}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  input,select,button{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:#fff}
+  input,select,button,textarea{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--card);color:var(--ink)}
+  textarea{width:100%;min-height:64px}
+  input::placeholder,textarea::placeholder{color:var(--muted)}
   button{cursor:pointer}
-  button.primary{background:#111;color:#fff;border-color:#000}
-  button.ghost{background:#f3f4f6}
-  button.danger{background:#fff;border-color:#ef4444;color:#b91c1c}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.ghost{background:transparent}
+  button.danger{background:transparent;border-color:#ef4444;color:#ef4444}
   .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-top:12px}
   .muted{color:var(--muted);font-size:12px}
   .tag{border:1px solid var(--border);border-radius:999px;padding:0 8px;font-size:11px}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
-  .tile{display:flex;flex-direction:column;gap:6px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;align-items:flex-start}
+  .tile{display:flex;flex-direction:column;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;align-items:flex-start}
   .name{font-weight:700}
-  .footbar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--border);padding:8px 12px;z-index:10}
+  .footbar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--border);padding:8px 12px;z-index:10}
   .footbar .row{justify-content:space-between}
-  .list-row{display:flex;gap:8px;align-items:center;justify-content:space-between;border-bottom:1px solid #eee;padding:6px 0;flex-wrap:wrap}
+  .list-row{display:flex;gap:8px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:6px 0;flex-wrap:wrap}
   table{width:100%;border-collapse:collapse}
-  th,td{padding:6px;border-bottom:1px solid #eee;text-align:right;font-size:13px}
+  th,td{padding:6px;border-bottom:1px solid var(--border);text-align:right;font-size:13px}
   th:first-child,td:first-child{text-align:left}
-  .pill{border-radius:999px;background:#f3f4f6;padding:2px 8px;font-size:12px}
-  #syncLog{white-space:pre-wrap;background:#111;color:#0f0;padding:8px;margin:8px;border-radius:8px;max-height:240px;overflow:auto}
-  .totalbox{display:flex;justify-content:space-between;align-items:center;background:#f9fafb;border:1px solid var(--border);border-radius:12px;padding:8px 12px}
+  .pill{border-radius:999px;background:transparent;border:1px dashed var(--border);padding:2px 8px;font-size:12px}
+  #syncLog{white-space:pre-wrap;background:#0b1119;color:#7ee787;padding:8px;margin:8px;border-radius:8px;max-height:240px;overflow:auto}
+  .kbd{font-family:ui-monospace,Consolas,monospace;border:1px solid var(--border);padding:2px 6px;border-radius:6px}
+  .numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .numpad button{font-size:20px;padding:12px;border-radius:12px}
+  .warn{color:#f59e0b}
+  .dangerText{color:#ef4444}
+  canvas{max-width:100%;background:transparent}
 </style>
 </head>
 <body>
@@ -42,13 +50,16 @@
       <input id="goal" inputmode="numeric" placeholder="売上目標(円)" style="max-width:150px">
       <input id="lowStock" inputmode="numeric" placeholder="在庫アラート" style="max-width:120px">
       <input id="cashier" placeholder="担当者" style="max-width:150px">
+      <button id="btnFS">全画面</button>
+      <button id="btnTheme">ダーク</button>
     </div>
   </div>
   <div class="row" style="margin-top:6px">
     <input id="search" placeholder="商品検索 (例: じゃが / SKU)" style="min-width:180px;flex:1">
     <select id="catFilter"><option value="">すべてのカテゴリ</option></select>
-    <!-- 表示日切替 -->
-    <input id="viewDate" type="date" style="max-width:160px">
+    <input id="viewDateFrom" type="date" style="max-width:160px">
+    <span class="muted">〜</span>
+    <input id="viewDateTo" type="date" style="max-width:160px">
     <button id="viewToday">今日</button>
   </div>
 </header>
@@ -76,7 +87,10 @@
 
   <!-- カート -->
   <section class="card">
-    <div style="font-weight:600">カート</div>
+    <div class="row" style="justify-content:space-between">
+      <div style="font-weight:600">カート</div>
+      <div class="row"><span class="muted">会計メモ</span><input id="orderMemo" placeholder="例: 体育館・3年A組"></div>
+    </div>
     <div id="cartLines"></div>
     <div class="row" style="margin-top:8px">
       <span class="pill">注文全体の割引</span>
@@ -85,30 +99,41 @@
       <label class="muted">円</label>
       <input id="discountYen" inputmode="numeric" placeholder="50" style="max-width:110px">
     </div>
-    <!-- ツケ設定（別枠） -->
     <div class="row" style="margin-top:8px">
-      <label class="row">
-        <input type="checkbox" id="creditFlag"> ツケ（掛売）
-      </label>
-      <input id="creditWho" placeholder="ツケ相手の氏名 / 学籍" style="max-width:240px">
-      <select id="creditStatus">
-        <option value="unpaid">未払い</option>
-        <option value="paid">支払い済み</option>
-      </select>
+      <span class="muted">受取</span><input id="cashReceived" inputmode="numeric" placeholder="0" style="max-width:120px">
+      <span class="muted">釣銭</span><span id="changeDue" class="kbd">¥0</span>
     </div>
-    <div class="muted" style="margin-top:4px">※ツケにチェックすると「掛売」で記録（在庫は減ります）。担当者は別フィールドで保持します。</div>
+    <!-- 掛売（別枠） -->
+    <div class="row" style="margin-top:8px">
+      <label class="row"><input type="checkbox" id="creditFlag"> ツケ（掛売）</label>
+      <input id="creditWho" placeholder="ツケ相手の氏名 / 学籍" style="max-width:240px">
+      <select id="creditStatus"><option value="unpaid">未払い</option><option value="paid">支払い済み</option></select>
+    </div>
+    <div class="muted" style="margin-top:4px">※ツケは「掛売」で記録。担当者とは別フィールドで保存。</div>
+
+    <!-- オンスクリーンテンキー -->
+    <div style="margin-top:8px">
+      <div class="muted">テンキー（数量・受取に使えます）</div>
+      <div class="numpad" id="numpad"></div>
+    </div>
   </section>
 
-  <!-- サマリ（表示日） -->
+  <!-- サマリ（期間集計＋KPI） -->
   <section class="card">
-    <div style="font-weight:600">サマリ（表示日） <span id="todayS"></span></div>
+    <div style="font-weight:600">サマリ（期間集計） <span id="rangeS"></span></div>
     <div id="summary"></div>
+    <div class="row" style="margin-top:6px;gap:16px">
+      <div>客単価 <b id="avgTicket">¥0</b></div>
+      <div>平均購入点数 <b id="avgItems">0</b></div>
+      <div class="row"><span class="muted">進捗</span><span id="progressPct" class="kbd">0%</span></div>
+      <div style="flex:1;height:12px;border:1px solid var(--border);border-radius:999px;overflow:hidden"><div id="progressBar" style="height:100%;width:0%;background:var(--accent)"></div></div>
+    </div>
   </section>
 
-  <!-- 商品別会計（表示日） -->
+  <!-- 商品別会計（期間） -->
   <section class="card">
     <div class="row" style="justify-content:space-between">
-      <div style="font-weight:600">商品別会計（表示日）</div>
+      <div style="font-weight:600">商品別（期間）</div>
       <div class="row"><button id="exportItemAgg">商品別CSV</button></div>
     </div>
     <div style="overflow:auto">
@@ -119,51 +144,92 @@
     </div>
   </section>
 
-  <!-- ツケ（未払い） -->
+  <!-- 在庫系（入庫/廃棄・予測） -->
   <section class="card">
     <div class="row" style="justify-content:space-between">
-      <div style="font-weight:600">ツケ（掛売）管理</div>
+      <div style="font-weight:600">在庫管理</div>
       <div class="row">
-        <button id="exportCredits">ツケCSV</button>
+        <input id="stockNote" placeholder="理由（入庫/廃棄）">
+        <button id="btnRestock">選択商品 入庫</button>
+        <button id="btnWaste" class="danger">選択商品 廃棄</button>
       </div>
     </div>
-    <div class="totalbox" style="margin:8px 0">
-      <div><b>未払い合計</b></div>
-      <div id="creditTotal" style="font-weight:800">¥0</div>
+    <div class="muted">予測: 直近3時間の販売ペースから売切れ予想時刻を計算。近いものは <span class="warn">警告色</span>。</div>
+    <div id="stockWarnings"></div>
+  </section>
+
+  <!-- 割引エンジン（時限/セット/ボリューム） -->
+  <section class="card">
+    <div style="font-weight:600">プロモ設定（簡易）</div>
+    <div class="row">
+      <label class="row">時限セール: <input id="saleStart" type="time">〜<input id="saleEnd" type="time"> <input id="salePct" inputmode="numeric" placeholder="%"></label>
+      <label class="row">セット割: SKU[A]+SKU[B]→¥<input id="comboPrice" inputmode="numeric" placeholder="特価"></label>
+      <label class="row">ボリューム割: n個以上で% <input id="volN" inputmode="numeric" placeholder="n"> / <input id="volPct" inputmode="numeric" placeholder="%"></label>
     </div>
+  </section>
+
+  <!-- ダッシュボード（チャート・TOP） -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <div style="font-weight:600">ダッシュボード</div>
+      <div class="row"><button id="refreshDash">更新</button></div>
+    </div>
+    <div class="row">
+      <div style="flex:2;min-width:260px"><canvas id="chartSales" height="140"></canvas></div>
+      <div style="flex:1;min-width:240px">
+        <div class="muted">TOP商品（数量）</div>
+        <ol id="topItems"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- 取引履歴 -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <div style="font-weight:600">取引履歴</div>
+      <div class="row"><input id="histSearch" placeholder="氏名/メモ/SKU"><button id="histRefresh">再読込</button></div>
+    </div>
+    <div id="history"></div>
+  </section>
+
+  <!-- 掛売（ツケ）管理 -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <div style="font-weight:600">掛売（ツケ）管理（期間内）</div>
+      <div class="row">
+        <button id="exportCredit">未払いCSV</button>
+        <button id="markAllPaid" class="danger">表示中の名前を全て精算済みに</button>
+      </div>
+    </div>
+    <div class="muted" style="margin:6px 0">未払い合計：<b id="creditTotal">¥0</b></div>
     <div style="overflow:auto">
       <table>
-        <thead>
-          <tr>
-            <th>氏名（ツケ相手）</th>
-            <th>未払い金額</th>
-            <th>件数</th>
-            <th>明細</th>
-            <th>操作</th>
-          </tr>
-        </thead>
+        <thead><tr><th>氏名</th><th>件数</th><th>金額</th><th>操作</th></tr></thead>
         <tbody id="creditTable"></tbody>
       </table>
     </div>
   </section>
 
-  <!-- CSV / 連携 -->
+  <!-- リマインダー・バックアップ・CSV/GAS同期 -->
   <section class="card">
-    <div class="row">
-      <button id="exportTx">取引CSV</button>
-      <button id="exportItems">商品CSV</button>
-      <input type="file" id="importItems" style="display:none">
-      <button onclick="document.getElementById('importItems').click()">商品CSV読込</button>
-      <button id="exportLowStock">在庫アラートCSV</button>
-      <button id="syncGoogle">Googleシート同期</button>
-      <label class="row"><input type="checkbox" id="autoSync"> 自動同期</label>
-      <button id="wipeTx" class="danger">取引 全消去</button>
-      <button id="wipeAll" class="danger">すべて初期化</button>
+    <div class="row" style="justify-content:space-between">
+      <div style="font-weight:600">リマインダー / バックアップ / CSV / 同期</div>
+      <div class="row">
+        <input id="remText" placeholder="例: 15:30 追加仕込み">
+        <input id="remAt" type="time"><button id="remSet">セット</button>
+        <button id="backupSave">バックアップ保存(JSON)</button>
+        <input type="file" id="backupLoad" style="display:none" />
+        <button onclick="document.getElementById('backupLoad').click()">バックアップ読込</button>
+        <button id="exportTx">取引CSV</button>
+        <button id="exportItems">商品CSV</button>
+        <input type="file" id="importItems" style="display:none">
+        <button onclick="document.getElementById('importItems').click()">商品CSV読込</button>
+        <button id="syncGoogle">Googleシート同期</button>
+      </div>
     </div>
-    <div class="muted" style="margin-top:6px">商品CSV列：<code>name,price,stock,sku,cat,dPct,dYen</code></div>
+    <div id="remList" class="muted" style="margin-top:6px"></div>
+    <pre id="syncLog" style="margin-top:8px">【同期ログ】ここに詳細が出ます</pre>
   </section>
-
-  <pre id="syncLog">【同期ログ】ここに詳細が出ます</pre>
 </main>
 
 <!-- フッター会計バー -->
@@ -176,32 +242,31 @@
     </div>
     <div class="row">
       <button id="commit" class="primary">販売記録</button>
-      <button id="refund">返金として記録</button>
+      <button id="refund">返金</button>
       <button id="clear" class="ghost">カート空に</button>
-      <label class="row" style="margin-left:8px"><input type="checkbox" id="printAfterSale"> 会計後レシート</label>
+      <label class="row" style="margin-left:8px"><input type="checkbox" id="printAfterSale"> レシート</label>
+      <label class="row"><input type="checkbox" id="soundFx" checked> 音/バイブ</label>
     </div>
   </div>
 </div>
 
 <script>
 /* ========= 定数/ユーティリティ ========= */
-const LS_I="komaba_pos_items_cat_v4";
-const LS_T="komaba_pos_txs_cat_v4";
-const LS_CASH="komaba_pos_cashier";
-const LS_GOAL="komaba_pos_goal";
-const LS_LOW="komaba_pos_lowstock";
+const LS_I="x_items_v1";
+const LS_T="x_txs_v1";
+const LS_MISC="x_misc_v1";
 const WKEY="komaba_pos_gas_webhook_v1";
-const LS_AUTOSYNC="komaba_pos_autosync_v1";
 function gid(id){return document.getElementById(id)}
-function read(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d)}
+function read(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function jpy(n){return "¥"+(Math.round(n)||0).toLocaleString("ja-JP")}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m]))}
+function ymd(d){return d.toISOString().slice(0,10)}
+function parseNum(s){return Number(String(s||"").replace(/[^0-9.-]/g,""))||0}
+function between(ts,from,to){const d=new Date(ts); return d>=from && d<new Date(to.getFullYear(),to.getMonth(),to.getDate()+1)}
+function beep(){if(!gid('soundFx').checked) return; try{const a=new (window.AudioContext||window.webkitAudioContext)();const o=a.createOscillator();const g=a.createGain();o.connect(g);g.connect(a.destination);o.type='square';o.frequency.value=880;g.gain.value=0.05;o.start();setTimeout(()=>{o.stop();a.close()},120)}catch{}; if(navigator.vibrate) navigator.vibrate(40)}
+function warnBeep(){if(!gid('soundFx').checked) return; try{const a=new (window.AudioContext||window.webkitAudioContext)();const o=a.createOscillator();const g=a.createGain();o.connect(g);g.connect(a.destination);o.type='sawtooth';o.frequency.value=220;g.gain.value=0.06;o.start();setTimeout(()=>{o.stop();a.close()},200)}catch{}; if(navigator.vibrate) navigator.vibrate([60,40,60])}
 function logSync(t){gid("syncLog").textContent="【同期ログ】\n"+t}
-function yyyyMMdd(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
-function selectedDate(){const el=gid("viewDate");if(el&&el.value){const[a,b,c]=el.value.split("-").map(Number);return new Date(a,b-1,c)}return new Date()}
-function isSameDayTs(ts,d){const x=new Date(ts);return x.getFullYear()===d.getFullYear()&&x.getMonth()===d.getMonth()&&x.getDate()===d.getDate()}
-async function fetchWithTimeout(input,init={},ms=15000){const ctrl=new AbortController();const id=setTimeout(()=>ctrl.abort(),ms);try{return await fetch(input,{...init,signal:ctrl.signal})}finally{clearTimeout(id)}}
 
 /* ========= 要素 ========= */
 const els={
@@ -213,15 +278,23 @@ const els={
   newItemBtn:gid("newItemBtn"),newForm:gid("newForm"),addItem:gid("addItem"),
   newName:gid("newName"),newPrice:gid("newPrice"),newStock:gid("newStock"),newSku:gid("newSku"),newCat:gid("newCat"),
   resetDemo:gid("resetDemo"),
-  todayS:gid("todayS"),summary:gid("summary"),itemAggTable:gid("itemAggTable"),
-  exportTx:gid("exportTx"),exportItems:gid("exportItems"),importItems:gid("importItems"),exportItemAgg:gid("exportItemAgg"),
-  exportLowStock:gid("exportLowStock"),
-  syncGoogle:gid("syncGoogle"),autoSync:gid("autoSync"),
-  viewDate:gid("viewDate"),viewToday:gid("viewToday"),
-  printAfterSale:gid("printAfterSale"),
-  wipeTx:gid("wipeTx"),wipeAll:gid("wipeAll"),
-  creditFlag:gid("creditFlag"),creditWho:gid("creditWho"),creditStatus:gid("creditStatus"),
-  exportCredits:gid("exportCredits"),creditTable:gid("creditTable"),creditTotal:gid("creditTotal")
+  avgTicket:gid("avgTicket"),avgItems:gid("avgItems"),summary:gid("summary"),rangeS:gid("rangeS"),
+  itemAggTable:gid("itemAggTable"),
+  orderMemo:gid("orderMemo"),cashReceived:gid("cashReceived"),changeDue:gid("changeDue"),
+  saleStart:gid("saleStart"),saleEnd:gid("saleEnd"),salePct:gid("salePct"),
+  comboPrice:gid("comboPrice"),volN:gid("volN"),volPct:gid("volPct"),
+  stockNote:gid("stockNote"),btnRestock:gid("btnRestock"),btnWaste:gid("btnWaste"),
+  stockWarnings:gid("stockWarnings"),
+  chartSales:gid("chartSales"),topItems:gid("topItems"),refreshDash:gid("refreshDash"),
+  histSearch:gid("histSearch"),histRefresh:gid("histRefresh"),history:gid("history"),
+  remText:gid("remText"),remAt:gid("remAt"),remSet:gid("remSet"),remList:gid("remList"),
+  exportTx:gid("exportTx"),exportItems:gid("exportItems"),importItems:gid("importItems"),
+  viewDateFrom:gid("viewDateFrom"),viewDateTo:gid("viewDateTo"),viewToday:gid("viewToday"),
+  btnTheme:gid("btnTheme"),btnFS:gid("btnFS"),progressPct:gid("progressPct"),progressBar:gid("progressBar"),
+  printAfterSale:gid("printAfterSale"),soundFx:gid("soundFx"),
+  numpad:gid("numpad"),backupSave:gid("backupSave"),backupLoad:gid("backupLoad"),
+  syncGoogle:gid("syncGoogle"),
+  creditTable:gid("creditTable"),creditTotal:gid("creditTotal"),exportCredit:gid("exportCredit"),markAllPaid:gid("markAllPaid")
 };
 
 /* ========= 状態 ========= */
@@ -233,24 +306,25 @@ let items=read(LS_I,[
 ]);
 let txs=read(LS_T,[]);
 let cart=[];
+let misc=read(LS_MISC,{
+  theme:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light',
+  sale:{start:"",end:"",pct:0}, combo:{price:0}, volume:{n:0,pct:0},
+  reminders:[], viewFrom:ymd(new Date()), viewTo:ymd(new Date())
+});
 
-/* ========= 入力復元 ========= */
-els.cashier.value=read(LS_CASH,"");
-els.goal.value=(read(LS_GOAL,"")||"");
-els.low.value=(read(LS_LOW,"")||"");
-els.cashier.addEventListener("input",()=>write(LS_CASH,els.cashier.value));
-els.goal.addEventListener("input",()=>write(LS_GOAL,(els.goal.value||"").replace(/[^0-9]/g,"")));
-els.low.addEventListener("input",()=>write(LS_LOW,(els.low.value||"").replace(/[^0-9]/g,"")));
-els.search.addEventListener("input",renderCatalog);
-els.catFilter.addEventListener("change",renderCatalog);
+/* ========= テーマ/フルスクリーン ========= */
+function applyTheme(){document.documentElement.setAttribute('data-theme', misc.theme==='dark'?'dark':'light'); els.btnTheme.textContent=(misc.theme==='dark'?'ライト':'ダーク')}
+els.btnTheme.addEventListener('click',()=>{misc.theme=misc.theme==='dark'?'light':'dark'; write(LS_MISC,misc); applyTheme()})
+els.btnFS.addEventListener('click',()=>{if(!document.fullscreenElement){document.documentElement.requestFullscreen?.()}else{document.exitFullscreen?.()}})
 
-/* ========= 商品 ========= */
+/* ========= カタログ ========= */
 function refreshCatOptions(){
   const cats=[...new Set(items.map(i=>i.cat).filter(Boolean))];
   els.catFilter.innerHTML='<option value="">すべてのカテゴリ</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');
 }
 function renderCatalog(){
-  const q=(els.search.value||"").toLowerCase(); const catSel=els.catFilter.value||""; const threshold=Number(els.low.value||0);
+  const q=(els.search.value||"").toLowerCase(); const catSel=els.catFilter.value||"";
+  const threshold=parseNum(els.low?.value||0);
   els.catalog.innerHTML="";
   items.filter(it=>{
     if(catSel && it.cat!==catSel) return false;
@@ -263,8 +337,8 @@ function renderCatalog(){
     t.innerHTML=`
       <div class="name">${esc(it.name)}</div>
       <div class="muted">${jpy(it.price)} / 在庫:${it.stock}
-        ${low?'<span class="tag" style="margin-left:6px;border-color:#f59e0b;color:#b45309">残りわずか</span>':''}
-        ${soldOut?'<span class="tag" style="margin-left:6px;border-color:#ef4444;color:#ef4444">売切れ</span>':''}
+        ${low?'<span class="tag warn" style="margin-left:6px">残りわずか</span>':''}
+        ${soldOut?'<span class="tag dangerText" style="margin-left:6px">売切れ</span>':''}
       </div>
       <div class="muted" style="font-size:11px">${it.cat?('カテゴリ:'+esc(it.cat)+'　'):""}${it.sku?('SKU:'+esc(it.sku)):""}</div>
       <div class="row" style="margin-top:6px">
@@ -276,10 +350,14 @@ function renderCatalog(){
         <button class="danger" data-del="${it.id}">削除</button>
       </div>`;
     if(!soldOut) t.querySelector(`[data-add="${it.id}"]`).addEventListener("click",()=>addToCart(it.id));
-    t.querySelector(`[data-dpct="${it.id}"]`).addEventListener("input",e=>{items[idx].dPct=Number((e.target.value||"").replace(/[^0-9]/g,""));write(LS_I,items)});
-    t.querySelector(`[data-dyen="${it.id}"]`).addEventListener("input",e=>{items[idx].dYen=Number((e.target.value||"").replace(/[^0-9]/g,""));write(LS_I,items)});
+    t.querySelector(`[data-dpct="${it.id}"]`).addEventListener("input",e=>{items[idx].dPct=parseNum(e.target.value);write(LS_I,items)});
+    t.querySelector(`[data-dyen="${it.id}"]`).addEventListener("input",e=>{items[idx].dYen=parseNum(e.target.value);write(LS_I,items)});
     t.querySelector(`[data-edit="${it.id}"]`).addEventListener("click",()=>editItem(it.id));
-    t.querySelector(`[data-del="${it.id}"]`).addEventListener("click",()=>deleteItem(it.id));
+    t.querySelector(`[data-del="${it.id}"]`).addEventListener("click",()=>{
+      if(!confirm(`『${it.name}』を削除します。よろしいですか？`)) return;
+      items=items.filter(x=>x.id!==it.id); cart=cart.filter(x=>x.id!==it.id);
+      write(LS_I,items); renderCatalog(); renderCart(); renderItemAgg(); refreshCatOptions();
+    });
     els.catalog.appendChild(t);
   });
 }
@@ -287,43 +365,56 @@ function editItem(id){
   const i=items.findIndex(x=>x.id===id); if(i<0) return;
   const it=items[i];
   const name=prompt("商品名",it.name); if(name===null) return;
-  const price=Number(String(prompt("単価(円)",it.price)).replace(/[^0-9]/g,"")); if(isNaN(price)) return alert("価格が不正");
-  const stock=Number(String(prompt("在庫",it.stock)).replace(/[^0-9]/g,"")); if(isNaN(stock)) return alert("在庫が不正");
+  const price=parseNum(prompt("単価(円)",it.price)); if(isNaN(price)) return alert("価格が不正");
+  const stock=parseNum(prompt("在庫",it.stock)); if(isNaN(stock)) return alert("在庫が不正");
   const sku=prompt("SKU",it.sku||""); if(sku===null) return;
   const cat=prompt("カテゴリ（例: フード/ドリンク）",it.cat||""); if(cat===null) return;
-  items[i]={...it,name,price,stock,sku,cat};
-  cart=cart.map(l=>l.id===id?{...l,name,price,sku,cat}:l);
-  write(LS_I,items); renderCatalog(); renderCart(); renderItemAgg(); refreshCatOptions();
-}
-function deleteItem(id){
-  const it=items.find(i=>i.id===id); if(!it) return;
-  if(!confirm(`『${it.name}』を削除します。よろしいですか？`)) return;
-  items=items.filter(i=>i.id!==id);
-  cart=cart.filter(l=>l.id!==id);
-  write(LS_I,items); renderCatalog(); renderCart(); renderItemAgg(); refreshCatOptions();
+  items[i]={...it,name,price,stock,sku,cat}; write(LS_I,items); renderCatalog(); renderCart(); refreshCatOptions(); calcStockWarnings();
 }
 
-/* ========= カート ========= */
+/* ========= カート/割引 ========= */
 function addToCart(id){
   const it=items.find(i=>i.id===id); if(!it) return;
   const ex=cart.find(l=>l.id===id);
-  if(ex){ ex.qty+=1; }
-  else{
-    cart.push({id:it.id,name:it.name,price:it.price,sku:it.sku||"",cat:it.cat||"",qty:1,lineDiscPct:Number(it.dPct||0),lineDiscYen:Number(it.dYen||0)});
-  }
-  renderCart();
+  if(ex){ ex.qty+=1; } else { cart.push({id:it.id,name:it.name,price:it.price,sku:it.sku||"",cat:it.cat||"",qty:1,lineDiscPct:it.dPct||0,lineDiscYen:it.dYen||0}); }
+  renderCart(); beep();
 }
-function lineDiscountedTotal(l){
-  const base=l.price*l.qty, pct=Math.max(0,Math.min(100,Number(l.lineDiscPct)||0)), yen=Math.max(0,Number(l.lineDiscYen)||0);
+function lineAfterDisc(l){
+  const base=l.price*l.qty, pct=Math.max(0,Math.min(100,parseNum(l.lineDiscPct)||0)), yen=Math.max(0,parseNum(l.lineDiscYen)||0);
   const disc=Math.min(base,Math.floor(base*pct/100)+yen); return base-disc;
 }
+function applyPromotions(subAfterLine){
+  // 時限セール
+  const now=new Date(); const st=misc.sale.start, ed=misc.sale.end, pct=parseNum(misc.sale.pct)||0;
+  let timeDisc=0;
+  if(st && ed){
+    const [sh,sm]=st.split(":").map(Number); const [eh,em]=ed.split(":").map(Number);
+    const from=new Date(now.getFullYear(),now.getMonth(),now.getDate(),sh||0,sm||0);
+    const to = new Date(now.getFullYear(),now.getMonth(),now.getDate(),eh||0,em||0);
+    if(now>=from && now<=to){ timeDisc=Math.floor(subAfterLine*(Math.min(80,Math.max(0,pct))/100)); }
+  }
+  // セット（簡易）
+  let comboDisc=0;
+  if(parseNum(els.comboPrice.value)>0 && cart.length>=2){
+    const targetPrice=parseNum(els.comboPrice.value);
+    const two=cart.slice(0,2).reduce((s,l)=>s+lineAfterDisc(l),0);
+    if(two>targetPrice){ comboDisc += (two-targetPrice); }
+  }
+  // ボリューム
+  let volDisc=0;
+  const n=parseNum(els.volN.value), pp=parseNum(els.volPct.value);
+  const totalQty=cart.reduce((s,l)=>s+l.qty,0);
+  if(n>0 && totalQty>=n && pp>0){ volDisc = Math.floor(subAfterLine*(Math.min(90,pp)/100)); }
+  return timeDisc + comboDisc + volDisc;
+}
 function totals(){
-  const subAfterLine=cart.reduce((s,l)=>s+lineDiscountedTotal(l),0);
-  const orderPct=Math.max(0,Math.min(100,Number((els.discountPct?.value||"").replace(/[^0-9]/g,""))||0));
-  const orderYen=Math.max(0,Number((els.discountYen?.value||"").replace(/[^0-9]/g,""))||0);
+  const subAfterLine=cart.reduce((s,l)=>s+lineAfterDisc(l),0);
+  const orderPct=Math.max(0,Math.min(100,parseNum(els.discountPct?.value)||0));
+  const orderYen=Math.max(0,parseNum(els.discountYen?.value)||0);
   const orderDisc=Math.min(subAfterLine,Math.floor(subAfterLine*orderPct/100)+orderYen);
-  const total=Math.max(0,subAfterLine-orderDisc);
-  return {subAfterLine,orderDisc,total,orderPct,orderYen};
+  const promoDisc=applyPromotions(subAfterLine-orderDisc);
+  const total=Math.max(0,subAfterLine-orderDisc-promoDisc);
+  return {subAfterLine,orderDisc,promoDisc,total,orderPct,orderYen};
 }
 function renderCart(){
   els.cartLines.innerHTML="";
@@ -339,24 +430,195 @@ function renderCart(){
         <span class="muted">商品割引</span>
         <input data-pct="${i}" inputmode="numeric" placeholder="% 例:10" style="max-width:90px" value="${l.lineDiscPct||""}">
         <input data-yen="${i}" inputmode="numeric" placeholder="円 例:50" style="max-width:110px" value="${l.lineDiscYen||""}">
-        <span style="margin-left:auto">小計: <b>${jpy(lineDiscountedTotal(l))}</b></span>
+        <span style="margin-left:auto">小計: <b>${jpy(lineAfterDisc(l))}</b></span>
       </div>`;
     els.cartLines.appendChild(row);
   });
-  els.cartLines.querySelectorAll("[data-inc]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.inc;cart[i].qty++;renderCart()}));
+  els.cartLines.querySelectorAll("[data-inc]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.inc;cart[i].qty++;renderCart();beep()}));
   els.cartLines.querySelectorAll("[data-dec]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.dec;cart[i].qty--;if(cart[i].qty<=0)cart.splice(i,1);renderCart()}));
   els.cartLines.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.del;cart.splice(i,1);renderCart()}));
-  els.cartLines.querySelectorAll("[data-pct]").forEach(inp=>inp.addEventListener("input",()=>{const i=+inp.dataset.pct;cart[i].lineDiscPct=Number((inp.value||"").replace(/[^0-9]/g,""));renderCart()}));
-  els.cartLines.querySelectorAll("[data-yen]").forEach(inp=>inp.addEventListener("input",()=>{const i=+inp.dataset.yen;cart[i].lineDiscYen=Number((inp.value||"").replace(/[^0-9]/g,""));renderCart()}));
-  els.cartTotal.textContent=jpy(totals().total);
+  els.cartLines.querySelectorAll("[data-pct]").forEach(inp=>inp.addEventListener("input",()=>{const i=+inp.dataset.pct;cart[i].lineDiscPct=parseNum(inp.value);renderCart()}));
+  els.cartLines.querySelectorAll("[data-yen]").forEach(inp=>inp.addEventListener("input",()=>{const i=+inp.dataset.yen;cart[i].lineDiscYen=parseNum(inp.value);renderCart()}));
+  const t=totals(); els.cartTotal.textContent=jpy(t.total);
+  const rec=parseNum(els.cashReceived.value); els.changeDue.textContent=jpy(Math.max(0,rec - t.total));
 }
-function clearCart(){cart=[];renderCart()}
+
+/* ========= 会計確定/返金 ========= */
+function commit(opts={refund:false}){
+  if(!cart.length) return alert("カートが空です");
+  if(!opts.refund){
+    const ng=cart.filter(l=>{const it=items.find(i=>i.id===l.id);return it && l.qty>it.stock});
+    if(ng.length){warnBeep();alert("在庫不足: "+ng.map(l=>l.name).join(", "));return;}
+  }
+  const t=totals();
+  const onCredit=gid('creditFlag').checked;
+  const tx={
+    id:Date.now()+""+Math.random().toString(36).slice(2),
+    ts:Date.now(),
+    lines:JSON.parse(JSON.stringify(cart)),
+    payment:onCredit?"掛売":els.pay.value,
+    cashier:els.cashier.value||"",
+    subtotal_after_line:t.subAfterLine,
+    order_discount:t.orderDisc,
+    promo_discount:t.promoDisc,
+    total:(t.subAfterLine - t.orderDisc - t.promoDisc)*(opts.refund?-1:1),
+    refund:!!opts.refund, void:false,
+    memo:(els.orderMemo.value||""),
+    credit:{enabled:onCredit,name:(gid('creditWho').value||"").trim(),status:onCredit?(gid('creditStatus').value||"unpaid"):"none"}
+  };
+  if(!opts.refund){
+    items=items.map(it=>{const l=cart.find(x=>x.id===it.id);return l?{...it,stock:Math.max(0,it.stock-l.qty)}:it});
+  } else {
+    items=items.map(it=>{const l=cart.find(x=>x.id===it.id);return l?{...it,stock:it.stock+l.qty}:it});
+  }
+  write(LS_I,items); txs=[tx,...txs]; write(LS_T,txs);
+  cart=[]; els.discountPct.value=""; els.discountYen.value=""; els.cashReceived.value=""; els.orderMemo.value="";
+  gid('creditFlag').checked=false; gid('creditWho').value=""; gid('creditStatus').value="unpaid";
+  renderCatalog(); renderCart(); renderSummary(); renderItemAgg(); renderHistory(); calcStockWarnings(); drawDashboard(); renderCredit();
+  beep();
+}
+els.commit.addEventListener("click",()=>commit());
+els.refund.addEventListener("click",()=>commit({refund:true}));
+els.clearBtn.addEventListener("click",()=>{cart=[];renderCart()});
+els.cashReceived.addEventListener("input",renderCart);
+
+/* ========= 期間サマリ/KPI ========= */
+function getRange(){const from=new Date(els.viewDateFrom.value+"T00:00:00"); const to=new Date(els.viewDateTo.value+"T00:00:00"); return {from,to}}
+function txInRange(){const r=getRange(); return txs.filter(tx=>!tx.void && between(tx.ts,r.from,r.to))}
+function renderSummary(){
+  const r=getRange(); els.rangeS.textContent=`${r.from.toLocaleDateString("ja-JP")} 〜 ${r.to.toLocaleDateString("ja-JP")}`;
+  const list=txInRange();
+  const byPay=new Map(); let gross=0,count=0,itemsCnt=0;
+  list.forEach(tx=>{gross+=tx.total; count++; byPay.set(tx.payment,(byPay.get(tx.payment)||0)+tx.total); itemsCnt+=tx.lines.reduce((s,l)=>s+l.qty,0)});
+  els.summary.innerHTML="";
+  for(const [k,v] of byPay.entries()){
+    const div=document.createElement("div");div.className="row";div.style.justifyContent="space-between";div.innerHTML=`<span>${k}</span><span>${jpy(v)}</span>`;els.summary.appendChild(div)
+  }
+  const totalDiv=document.createElement("div"); totalDiv.style.display="flex"; totalDiv.style.justifyContent="space-between"; totalDiv.style.fontWeight="700";
+  totalDiv.innerHTML=`<span>合計</span><span>${jpy(gross)}</span>`; els.summary.appendChild(totalDiv);
+  els.avgTicket.textContent = jpy(count? Math.round(gross/count):0);
+  els.avgItems.textContent = count? (itemsCnt/count).toFixed(2) : "0.00";
+  const goal = parseNum(els.goal.value); const ratio = goal>0? Math.min(1,gross/goal):0;
+  gid("progressPct").textContent = Math.floor(ratio*100)+"%";
+  gid("progressBar").style.width = (ratio*100)+"%";
+}
+
+/* ========= 商品別（期間） ========= */
+function buildItemAgg(){
+  const map=new Map(); items.forEach(it=>map.set(it.id,{id:it.id,name:it.name,cat:it.cat||"",qty:0,amount:0,stock:it.stock}));
+  txInRange().forEach(tx=>{
+    const lineTotals=tx.lines.map(l=>{
+      const base=l.price*l.qty, pct=parseNum(l.lineDiscPct), yen=parseNum(l.lineDiscYen);
+      const disc=Math.min(base,Math.floor(base*pct/100)+yen);
+      return {id:l.id,qty:l.qty*(tx.refund?-1:1),subtotal:(base-disc)};
+    });
+    const sub=lineTotals.reduce((s,x)=>s+x.subtotal,0);
+    const sharePromo=parseNum(tx.promo_discount||0);
+    const orderDisc=parseNum(tx.order_discount||0);
+    for(const lt of lineTotals){
+      const share=sub>0?((sharePromo+orderDisc)*(lt.subtotal/sub)):0;
+      const net=lt.subtotal-share;
+      const r=map.get(lt.id); r.qty+=lt.qty; r.amount+=net;
+    }
+  });
+  return Array.from(map.values());
+}
+function renderItemAgg(){
+  const rows=buildItemAgg(); els.itemAggTable.innerHTML="";
+  rows.forEach(r=>{const avg=r.qty?Math.round(r.amount/r.qty):0; const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${esc(r.name)}</td><td>${esc(r.cat||"")}</td><td>${r.qty}</td><td>${jpy(Math.round(r.amount))}</td><td>${jpy(avg)}</td><td>${r.stock}</td>`;
+    els.itemAggTable.appendChild(tr)});
+}
+
+/* ========= 在庫 入庫/廃棄/予測 ========= */
+function selectedItemPrompt(){const name=prompt("対象商品の『商品名』を正確に入力"); if(!name)return null; const it=items.find(x=>x.name===name); if(!it){alert("商品が見つかりません");return null} return it}
+els.btnRestock.addEventListener("click",()=>{const it=selectedItemPrompt(); if(!it)return; const add=parseNum(prompt("入庫数量","0")); if(add<=0)return; it.stock+=add; write(LS_I,items); renderCatalog(); calcStockWarnings(); beep();})
+els.btnWaste.addEventListener("click",()=>{const it=selectedItemPrompt(); if(!it)return; const sub=parseNum(prompt("廃棄数量","0")); if(sub<=0)return; it.stock=Math.max(0,it.stock-sub); write(LS_I,items); renderCatalog(); calcStockWarnings(); warnBeep();})
+function calcStockWarnings(){
+  const now=Date.now(), three=now-3*3600*1000;
+  const pace={}; txs.forEach(tx=>{
+    if(tx.ts<three||tx.void) return;
+    tx.lines.forEach(l=>{pace[l.id]=(pace[l.id]||0)+l.qty});
+  });
+  const rows=[];
+  items.forEach(it=>{
+    const perHour=(pace[it.id]||0)/3;
+    if(perHour>0){
+      const hours=it.stock/perHour;
+      const est=new Date(Date.now()+hours*3600*1000);
+      rows.push({name:it.name,stock:it.stock,perHour,est});
+    }
+  });
+  rows.sort((a,b)=>a.est-b.est);
+  els.stockWarnings.innerHTML = rows.map(r=>{
+    const soon=(r.est - Date.now())<2*3600*1000;
+    return `<div class="${soon?'warn':''}">・${esc(r.name)} 残${r.stock} / ${r.perHour.toFixed(1)}個/時 → 売切予想 ${r.est.toLocaleTimeString("ja-JP")}${soon?'（要補充）':''}</div>`;
+  }).join("") || "<div class='muted'>十分な在庫があります</div>";
+}
+
+/* ========= ダッシュボード ========= */
+function drawSalesChart(canvas,hourly){
+  const ctx=canvas.getContext('2d'); const w=canvas.width=canvas.clientWidth; const h=canvas.height=canvas.height;
+  ctx.clearRect(0,0,w,h);
+  const keys=Object.keys(hourly); const vals=keys.map(k=>hourly[k]); const max=Math.max(1,...vals); const bw=w/keys.length;
+  keys.forEach((k,i)=>{const v=hourly[k]; const barH=Math.round((v/max)*(h-20));
+    ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--accent')||'#111';
+    ctx.fillRect(i*bw+4, h-barH-10, Math.max(10,bw-8), barH);
+    ctx.fillStyle=getComputedStyle(document.body).color; ctx.font="10px system-ui"; ctx.fillText(k, i*bw+6, h-2);
+  });
+}
+function drawDashboard(){
+  const r=getRange(); const list=txInRange();
+  const hours={}; for(let i=0;i<24;i++){hours[i]=0}
+  list.forEach(tx=>{const d=new Date(tx.ts); hours[d.getHours()]+=tx.total});
+  drawSalesChart(els.chartSales,hours);
+  const qtyMap=new Map();
+  list.forEach(tx=>tx.lines.forEach(l=>qtyMap.set(l.name,(qtyMap.get(l.name)||0)+l.qty)));
+  const top=[...qtyMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
+  els.topItems.innerHTML= top.map(([name,qty])=>`<li>${esc(name)} <span class="muted">×${qty}</span></li>`).join("") || "<li class='muted'>データなし</li>";
+}
+els.refreshDash.addEventListener("click",drawDashboard);
+
+/* ========= 履歴 ========= */
+function renderHistory(){
+  const q=(els.histSearch.value||"").toLowerCase();
+  const list=txInRange().filter(tx=>{
+    const s=[tx.memo, tx.cashier, tx.credit?.name, ...(tx.lines||[]).map(l=>l.sku||"")].join(" ").toLowerCase();
+    return s.includes(q);
+  });
+  els.history.innerHTML = list.map(tx=>{
+    const d=new Date(tx.ts).toLocaleString("ja-JP");
+    const lines=tx.lines.map(l=>`${esc(l.name)}×${l.qty}`).join(" + ");
+    return `<div class="list-row">
+      <div>
+        <div><b>${d}</b> / ID:${tx.id.slice(-6)} / ${tx.payment} / ${jpy(tx.total)}</div>
+        <div class="muted">担当:${esc(tx.cashier||"-")}　ツケ:${tx.credit?.enabled?esc(tx.credit.name||"-")+"("+esc(tx.credit.status)+")":"-"}</div>
+        <div class="muted">メモ:${esc(tx.memo||"-")}</div>
+        <div class="muted">${lines}</div>
+      </div>
+      <div class="row">
+        <button data-print="${tx.id}">レシート</button>
+        <button class="danger" data-void="${tx.id}">取消</button>
+      </div>
+    </div>`;
+  }).join("") || "<div class='muted'>該当なし</div>";
+
+  els.history.querySelectorAll("[data-print]").forEach(b=>b.addEventListener("click",()=>{
+    const tx=txs.find(t=>t.id===b.dataset.print); if(tx) printReceipt(tx);
+  }));
+  els.history.querySelectorAll("[data-void]").forEach(b=>b.addEventListener("click",()=>{
+    const id=b.dataset.void; if(!confirm("この取引を取消（void）しますか？")) return;
+    txs=txs.map(t=>t.id===id?{...t,void:true}:t); write(LS_T,txs); renderHistory(); renderSummary(); drawDashboard(); renderCredit();
+  }));
+}
+els.histRefresh.addEventListener("click",renderHistory);
+els.histSearch.addEventListener("input",renderHistory);
 
 /* ========= レシート ========= */
 function printReceipt(tx){
   const d=new Date(tx.ts);
   const linesHtml=tx.lines.map(l=>{
-    const base=l.price*l.qty, pct=Number(l.lineDiscPct||0), yen=Number(l.lineDiscYen||0);
+    const base=l.price*l.qty, pct=parseNum(l.lineDiscPct), yen=parseNum(l.lineDiscYen);
     const disc=Math.min(base,Math.floor(base*pct/100)+yen), net=base-disc;
     return `<tr><td>${esc(l.name)} ×${l.qty}</td><td style="text-align:right">¥${net.toLocaleString("ja-JP")}</td></tr>`;
   }).join("");
@@ -365,271 +627,213 @@ function printReceipt(tx){
   <div>${d.toLocaleString("ja-JP")} / ID:${tx.id.slice(-6)}</div>
   <div>担当:${esc(tx.cashier||"-")}</div>
   ${tx.credit?.enabled?`<div style="margin-top:4px"><b>ツケ相手:</b> ${esc(tx.credit.name||"-")}（${tx.credit.status==="unpaid"?"未払い":"支払い済み"}）</div>`:""}
+  ${tx.memo?`<div style="margin-top:4px">メモ:${esc(tx.memo)}</div>`:""}
   <hr><table>${linesHtml}</table><hr>
   <table><tr><td>小計(行割後)</td><td style="text-align:right">¥${tx.subtotal_after_line.toLocaleString("ja-JP")}</td></tr>
-  <tr><td>会計割引</td><td style="text-align:right">−¥${tx.order_discount.toLocaleString("ja-JP")}</td></tr>
+  <tr><td>会計+プロモ割引</td><td style="text-align:right">−¥${(parseNum(tx.order_discount)+parseNum(tx.promo_discount)).toLocaleString("ja-JP")}</td></tr>
   <tr><td><b>合計</b></td><td style="text-align:right"><b>¥${tx.total.toLocaleString("ja-JP")}</b></td></tr></table>
   <script>window.print()`;
   const w=window.open("", "_blank", "width=420,height=640"); w.document.open(); w.document.write(html); w.document.close();
 }
 
-/* ========= 取引確定 ========= */
-function commit(opts={refund:false}){
-  if(!cart.length) return alert("カートが空です");
-  if(!opts.refund){
-    const ng=cart.filter(l=>{const it=items.find(i=>i.id===l.id);return it && l.qty>it.stock});
-    if(ng.length){alert("在庫不足: "+ng.map(l=>l.name).join(", "));return;}
-  }
-  const t=totals();
-  const onCredit=!!(els.creditFlag && els.creditFlag.checked);
-  const tx={
-    id:Date.now()+""+Math.random().toString(36).slice(2),
-    ts:Date.now(),
-    lines:JSON.parse(JSON.stringify(cart)),
-    payment:onCredit?"掛売":els.pay.value,
-    cashier:els.cashier.value||"",
-    subtotal_after_line:t.subAfterLine,
-    order_discount:opts.refund?0:t.orderDisc,
-    order_discount_pct:opts.refund?0:t.orderPct,
-    order_discount_yen:opts.refund?0:t.orderYen,
-    total:(t.subAfterLine-(opts.refund?0:t.orderDisc))*(opts.refund?-1:1),
-    refund:!!opts.refund, void:false,
-    credit:{enabled:onCredit,name:(els.creditWho?.value||"").trim(),status:onCredit?(els.creditStatus?.value||"unpaid"):"none"},
-    synced:false
-  };
-  if(!opts.refund){
-    items=items.map(it=>{const l=cart.find(x=>x.id===it.id);return l?{...it,stock:Math.max(0,it.stock-l.qty)}:it});
-  } else {
-    items=items.map(it=>{const l=cart.find(x=>x.id===it.id);return l?{...it,stock:it.stock+l.qty}:it});
-  }
-  write(LS_I,items);
-  txs=[tx,...txs]; write(LS_T,txs);
-  clearCart(); els.discountPct.value=""; els.discountYen.value="";
-  if(els.creditFlag) els.creditFlag.checked=false; if(els.creditWho) els.creditWho.value=""; if(els.creditStatus) els.creditStatus.value="unpaid";
-  renderCatalog(); renderSummary(); renderItemAgg(); refreshCatOptions(); renderCreditList();
-  if(els.printAfterSale && els.printAfterSale.checked){printReceipt(tx)}
-  if(els.autoSync && els.autoSync.checked){syncNewTxs()}
-}
-els.commit.addEventListener("click",()=>commit());
-els.refund.addEventListener("click",()=>commit({refund:true}));
-els.clearBtn.addEventListener("click",clearCart);
-
-/* ========= サマリ/商品別（表示日） ========= */
-function renderSummary(){
-  const target=selectedDate(); els.todayS.textContent=target.toLocaleDateString("ja-JP");
-  const byPay=new Map(); let gross=0,count=0;
-  for(const tx of txs){if(!isSameDayTs(tx.ts,target)||tx.void) continue; gross+=tx.total; count++; byPay.set(tx.payment,(byPay.get(tx.payment)||0)+tx.total)}
-  els.summary.innerHTML="";
-  for(const [k,v] of byPay.entries()){
-    const div=document.createElement("div");div.className="row";div.style.justifyContent="space-between";div.innerHTML=`<span>${k}</span><span>${jpy(v)}</span>`;els.summary.appendChild(div)
-  }
-  // ツケ売上（別枠）
-  const creditSales = txs.filter(tx=>isSameDayTs(tx.ts,target)&&tx.credit?.enabled&&!tx.void).reduce((s,tx)=>s+tx.total,0);
-  if(creditSales>0){
-    const c=document.createElement("div");
-    c.className="row";
-    c.style.justifyContent="space-between";
-    c.innerHTML=`<span>ツケ売上</span><span>${jpy(creditSales)}</span>`;
-    els.summary.appendChild(c);
-  }
-  const goal=Math.max(0,Number((els.goal?.value||"").replace(/[^0-9]/g,""))||0);
-  const totalDiv=document.createElement("div");totalDiv.style.display="flex";totalDiv.style.justifyContent="space-between";totalDiv.style.fontWeight="700";
-  totalDiv.innerHTML=`<span>合計</span><span>${jpy(gross)}</span>`;els.summary.appendChild(totalDiv);
-  if(goal>0){
-    const ratio=Math.min(1,gross/goal);
-    const bar=document.createElement("div");bar.style.marginTop="8px";
-    bar.innerHTML=`<div class="muted" style="display:flex;justify-content:space-between"><span>売上目標:${jpy(goal)}</span><span>${Math.floor(ratio*100)}%</span></div>
-      <div style="height:10px;border:1px solid #ccc;border-radius:999px;overflow:hidden"><div style="height:100%;width:${ratio*100}%;background:#111"></div></div>`;
-    els.summary.appendChild(bar)
-  }
-}
-function buildItemAggSelectedDate(){
-  const target=selectedDate(); const map=new Map();
-  for(const it of items){map.set(it.id,{id:it.id,name:it.name,cat:it.cat||"",qty:0,amount:0,stock:it.stock})}
-  for(const tx of txs){
-    if(!isSameDayTs(tx.ts,target)||tx.void) continue;
-    const lineTotals=tx.lines.map(l=>{
-      const base=l.price*l.qty, pct=Number(l.lineDiscPct||0), yen=Number(l.lineDiscYen||0);
-      const disc=Math.min(base,Math.floor(base*pct/100)+yen); return{id:l.id,qty:l.qty*(tx.refund?-1:1),subtotal:(base-disc)};
-    });
-    const sub=lineTotals.reduce((s,x)=>s+x.subtotal,0); const orderDisc=(tx.order_discount||0)*(tx.refund?-1:1);
-    for(const lt of lineTotals){const share=sub>0?orderDisc*(lt.subtotal/sub):0; const net=lt.subtotal-share; const r=map.get(lt.id); r.qty+=lt.qty; r.amount+=net}
-  }
-  return Array.from(map.values());
-}
-function renderItemAgg(){
-  const rows=buildItemAggSelectedDate(); els.itemAggTable.innerHTML="";
-  rows.forEach(r=>{const avg=r.qty?Math.round(r.amount/r.qty):0; const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${esc(r.name)}</td><td>${esc(r.cat||"")}</td><td>${r.qty}</td><td>${jpy(Math.round(r.amount))}</td><td>${jpy(avg)}</td><td>${r.stock}</td>`;
-    els.itemAggTable.appendChild(tr)});
-}
-
-/* ========= ツケ管理（集計/精算/CSV） ========= */
-function renderCreditList(){
-  if(!els.creditTable) return;
-  // 名前ごとに未払い集計
-  const map=new Map(); // name -> {amount,count,txids[]}
-  txs.forEach(tx=>{
-    if(tx.void || !tx.credit?.enabled || tx.credit.status!=="unpaid") return;
-    const key=(tx.credit.name||"（未入力）").trim();
-    const cur=map.get(key)||{amount:0,count:0,txids:[]};
-    cur.amount+=tx.total; cur.count+=1; cur.txids.push(tx.id);
+/* ========= 掛売（ツケ）管理 ========= */
+function buildCreditMap(){
+  const list=txInRange().filter(tx=>tx.credit?.enabled && tx.credit.status==='unpaid' && !tx.void);
+  const map=new Map();
+  list.forEach(tx=>{
+    const key=(tx.credit.name||"不明").trim()||"不明";
+    const cur=map.get(key)||{name:key,count:0,amount:0,ids:[]};
+    cur.count+=1; cur.amount+=tx.total; cur.ids.push(tx.id);
     map.set(key,cur);
   });
-  // 合計
-  let total=0; els.creditTable.innerHTML="";
-  Array.from(map.entries()).sort((a,b)=>b[1].amount-a[1].amount).forEach(([name,info])=>{
-    total+=info.amount;
-    const tr=document.createElement("tr");
-    const idsAttr=info.txids.join("|");
-    tr.innerHTML=`
-      <td>${esc(name)}</td>
-      <td style="text-align:right">${jpy(info.amount)}</td>
-      <td style="text-align:center">${info.count}</td>
-      <td><button data-show="${idsAttr}">表示</button></td>
-      <td><button class="primary" data-pay="${idsAttr}">全件 支払い済みに</button></td>`;
-    els.creditTable.appendChild(tr);
-  });
-  els.creditTotal.textContent=jpy(total);
-
-  // 明細表示
-  els.creditTable.querySelectorAll("[data-show]").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      const ids=new Set(btn.getAttribute("data-show").split("|"));
-      const rows=txs.filter(t=>ids.has(t.id)).map(t=>{
-        const d=new Date(t.ts).toLocaleString("ja-JP");
-        return `・${d}  ${t.lines.map(l=>`${l.name}×${l.qty}`).join(" + ")}  = ${jpy(t.total)}`;
-      }).join("\n");
-      alert(rows||"明細なし");
-    });
-  });
-  // 一括支払い済み
-  els.creditTable.querySelectorAll("[data-pay]").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      const ids=new Set(btn.getAttribute("data-pay").split("|"));
-      if(!confirm("選択したツケを全て『支払い済み』にします。よろしいですか？")) return;
-      txs=txs.map(t=>ids.has(t.id)?{...t,credit:{...t.credit,status:"paid"},synced:false}:t);
-      write(LS_T,txs); renderCreditList(); renderSummary();
-    });
-  });
+  return [...map.values()].sort((a,b)=>b.amount-a.amount);
 }
-if(els.exportCredits){
-  els.exportCredits.addEventListener("click",()=>{
-    const rows=[["name","amount","count","tx_ids"]];
-    const map=new Map();
-    txs.forEach(tx=>{
-      if(tx.void || !tx.credit?.enabled) return;
-      const nm=(tx.credit.name||"（未入力）").trim();
-      const cur=map.get(nm)||{amount:0,count:0,ids:[]};
-      cur.amount+=tx.total; cur.count++; cur.ids.push(tx.id); map.set(nm,cur);
-    });
-    Array.from(map.entries()).forEach(([name,info])=>{
-      rows.push([name,Math.round(info.amount),info.count,info.ids.join(" ")]);
-    });
-    const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
-    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="credits.csv"; a.click();
-  });
+function renderCredit(){
+  const rows=buildCreditMap();
+  els.creditTable.innerHTML = rows.map(r=>`<tr>
+    <td>${esc(r.name)}</td><td>${r.count}</td><td>${jpy(r.amount)}</td>
+    <td><button data-credit-done="${encodeURIComponent(r.name)}">精算済みにする</button></td>
+  </tr>`).join("") || `<tr><td colspan="4" class="muted">未払いはありません</td></tr>`;
+  const total=rows.reduce((s,r)=>s+r.amount,0); els.creditTotal.textContent = jpy(total);
+  els.creditTable.querySelectorAll("[data-credit-done]").forEach(b=>b.addEventListener("click",()=>{
+    const name=decodeURIComponent(b.dataset.creditDone);
+    if(!confirm(`${name} さんの未払いを「支払い済み」にしますか？`)) return;
+    txs = txs.map(tx=> (tx.credit?.enabled && tx.credit.name===name && tx.credit.status==='unpaid') ? {...tx, credit:{...tx.credit, status:'paid'}} : tx );
+    write(LS_T,txs); renderCredit(); renderHistory(); renderSummary();
+  }));
 }
+els.exportCredit.addEventListener("click",()=>{
+  const rows=[["name","count","amount_jpy"]];
+  buildCreditMap().forEach(r=>rows.push([r.name,r.count,Math.round(r.amount)]));
+  const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="credit_unpaid.csv"; a.click();
+});
+els.markAllPaid.addEventListener("click",()=>{
+  const rows=buildCreditMap(); if(!rows.length) return alert("未払いはありません");
+  if(!confirm("表示中の未払いを全員『支払い済み』にします。よろしいですか？")) return;
+  const names=new Set(rows.map(r=>r.name));
+  txs = txs.map(tx=> (tx.credit?.enabled && names.has(tx.credit.name) && tx.credit.status==='unpaid') ? {...tx, credit:{...tx.credit, status:'paid'}} : tx );
+  write(LS_T,txs); renderCredit(); renderHistory(); renderSummary();
+});
 
-/* ========= CSV/連携 ========= */
+/* ========= リマインダー ========= */
+function renderReminders(){
+  els.remList.innerHTML = (misc.reminders||[]).map(r=>`<div>・${esc(r.time)} ${esc(r.text)}</div>`).join("") || "<div class='muted'>なし</div>";
+}
+els.remSet.addEventListener('click',()=>{
+  const text=els.remText.value.trim(); const t=els.remAt.value;
+  if(!t || !text) return alert("時間と内容を入力してください");
+  (misc.reminders=misc.reminders||[]).push({time:t,text,ack:false});
+  write(LS_MISC,misc); renderReminders();
+});
+setInterval(()=>{
+  const now=new Date(); const hh=String(now.getHours()).padStart(2,'0'); const mm=String(now.getMinutes()).padStart(2,'0'); const cur=`${hh}:${mm}`;
+  (misc.reminders||[]).forEach(r=>{
+    if(!r.ack && r.time===cur){ alert("リマインド: "+r.text); r.ack=true; write(LS_MISC,misc); renderReminders(); warnBeep(); }
+  });
+}, 5000);
+
+/* ========= バックアップ ========= */
+els.backupSave.addEventListener('click',()=>{
+  const blob=new Blob([JSON.stringify({items,txs,misc},null,2)],{type:"application/json"});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pos_backup.json'; a.click();
+});
+els.backupLoad.addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader(); rd.onload=ev=>{
+    try{
+      const obj=JSON.parse(ev.target.result);
+      if(obj.items) items=obj.items;
+      if(obj.txs) txs=obj.txs;
+      if(obj.misc) misc=obj.misc;
+      write(LS_I,items); write(LS_T,txs); write(LS_MISC,misc);
+      applyTheme(); initRange(); refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit();
+      alert("バックアップを読み込みました");
+    }catch(e){alert("読込エラー: "+e.message)}
+  }; rd.readAsText(f);
+});
+
+/* ========= CSV入出力 ========= */
 els.exportItems.addEventListener("click",()=>{
   const rows=[["name","price","stock","sku","cat","dPct","dYen"]];
   items.forEach(it=>rows.push([it.name,it.price,it.stock||0,it.sku||"",it.cat||"",it.dPct||0,it.dYen||0]));
-  const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="items.csv"; a.click();
-});
-els.exportTx.addEventListener("click",()=>{
-  const rows=[["tx_id","timestamp","date_jst","payment","cashier","subtotal_after_line","order_discount","order_discount_pct","order_discount_yen","total","refund","void","credit_enabled","credit_name","credit_status","line_item_id","item_name","sku","category","qty","unit_price","line_discount_pct","line_discount_yen","line_total"]];
-  txs.forEach(tx=>{
-    tx.lines.forEach(line=>{
-      const base=line.price*line.qty, pct=Number(line.lineDiscPct||0), yen=Number(line.lineDiscYen||0);
-      const disc=Math.min(base,Math.floor(base*pct/100)+yen), lineTotal=base-disc;
-      rows.push([tx.id,new Date(tx.ts).toISOString(),new Date(tx.ts).toLocaleString("ja-JP"),tx.payment,tx.cashier,tx.subtotal_after_line,tx.order_discount,tx.order_discount_pct,tx.order_discount_yen,tx.total,tx.refund?1:0,tx.void?1:0,tx.credit?.enabled?1:0,tx.credit?.name||"",tx.credit?.status||"none",line.id,line.name,line.sku||"",line.cat||"",line.qty*(tx.refund?-1:1),line.price,pct,yen,lineTotal*(tx.refund?-1:1)]);
-    });
-  });
-  const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="transactions.csv"; a.click();
+  const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="items.csv"; a.click();
 });
 els.importItems.addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f)return;
   const reader=new FileReader();
   reader.onload=ev=>{
-    const text=String(ev.target.result).trim(), lines=text.split(/\r?\n/).filter(Boolean), header=lines.shift().split(",");
-    const iName=header.indexOf("name"),iPrice=header.indexOf("price"),iStock=header.indexOf("stock"),iSku=header.indexOf("sku"),iCat=header.indexOf("cat"),iDPct=header.indexOf("dPct"),iDYen=header.indexOf("dYen");
-    items=lines.map(r=>{const c=r.split(",");return{id:crypto.randomUUID(),name:c[iName],price:Number(c[iPrice]),stock:Number(c[iStock]||0),sku:c[iSku]||"",cat:(iCat>=0?c[iCat]:""),dPct:Number(c[iDPct]||0),dYen:Number(c[iDYen]||0)}}).filter(x=>x.name&&!isNaN(x.price));
+    const text=String(ev.target.result).trim();
+    const lines=text.split(/\r?\n/).filter(Boolean);
+    const header=lines.shift().split(",");
+    const iName=header.indexOf("name"), iPrice=header.indexOf("price"),
+          iStock=header.indexOf("stock"), iSku=header.indexOf("sku"),
+          iCat=header.indexOf("cat"), iDPct=header.indexOf("dPct"),
+          iDYen=header.indexOf("dYen");
+    items = lines.map(r=>{
+      const c=r.split(",");
+      return {id:crypto.randomUUID(),name:c[iName],price:Number(c[iPrice]),stock:Number(c[iStock]||0),sku:c[iSku]||"",cat:(iCat>=0?c[iCat]:""),dPct:Number(c[iDPct]||0),dYen:Number(c[iDYen]||0)};
+    }).filter(x=>x.name && !isNaN(x.price));
     write(LS_I,items); renderCatalog(); renderItemAgg(); refreshCatOptions();
   };
   reader.readAsText(f);
 });
-els.exportItemAgg.addEventListener("click",()=>{
-  const rows=buildItemAggSelectedDate(); const csv=[["item_name","category","qty","amount","avg_price","stock"]];
-  rows.forEach(r=>csv.push([r.name,r.cat||"",r.qty,Math.round(r.amount),r.qty?Math.round(r.amount/r.qty):0,r.stock]));
-  const blob=new Blob([csv.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="item_agg_selected_date.csv"; a.click();
-});
-els.exportLowStock.addEventListener("click",()=>{
-  const threshold=Math.max(0,Number((els.low?.value||"").replace(/[^0-9]/g,""))||0);
-  const rows=[["name","stock","sku","cat","price","note"]];
-  items.filter(it=>it.stock<=threshold).forEach(it=>rows.push([it.name,it.stock,it.sku||"",it.cat||"",it.price,"補充要"]));
-  const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="low_stock.csv"; a.click();
+els.exportTx.addEventListener("click",()=>{
+  const rows=[["tx_id","timestamp","date_jst","payment","cashier","subtotal_after_line","order_discount","promo_discount","total","refund","void","memo","credit_enabled","credit_name","credit_status","line_item_id","item_name","sku","category","qty","unit_price","line_discount_pct","line_discount_yen","line_total"]];
+  txs.forEach(tx=>{
+    tx.lines.forEach(line=>{
+      const base=line.price*line.qty, pct=parseNum(line.lineDiscPct||0), yen=parseNum(line.lineDiscYen||0);
+      const disc=Math.min(base,Math.floor(base*pct/100)+yen), lineTotal=(base-disc)*(tx.refund?-1:1);
+      rows.push([tx.id,new Date(tx.ts).toISOString(),new Date(tx.ts).toLocaleString("ja-JP"),tx.payment,tx.cashier,tx.subtotal_after_line,tx.order_discount,tx.promo_discount,tx.total,tx.refund?1:0,tx.void?1:0,tx.memo||"",tx.credit?.enabled?1:0,tx.credit?.name||"",tx.credit?.status||"none",line.id,line.name,line.sku||"",line.cat||"",line.qty*(tx.refund?-1:1),line.price,pct,yen,lineTotal]);
+    });
+  });
+  const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="transactions.csv"; a.click();
 });
 
-/* ========= 同期（手動/自動） ========= */
-els.syncGoogle.addEventListener("click", async ()=>{
-  let url=localStorage.getItem(WKEY)||""; url=prompt("（学内限定）Apps ScriptのWebhook URL（/exec）",url); if(!url) return; localStorage.setItem(WKEY,url);
-  try{
-    const ping=await fetchWithTimeout(url,{method:"GET",cache:"no-store"},8000); const pingText=await ping.text().catch(()=>"(no body)");
-    logSync(`PING: HTTP ${ping.status}\n${pingText}`); if(!ping.ok){alert(`同期エラー: ${ping.status}`);return}
-    const pending=txs.filter(t=>t.synced!==true);
-    if(!pending.length){logSync("未同期の取引はありません");alert("未同期の取引はありません");return}
-    const res=await fetchWithTimeout(url,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({txs:pending})},15000);
-    const text=await res.text().catch(()=>"(no body)"); logSync(`POST: HTTP ${res.status}\n${text}`);
-    if(res.ok){const ids=new Set(pending.map(t=>t.id)); txs=txs.map(t=>ids.has(t.id)?{...t,synced:true}:t); write(LS_T,txs); alert(`同期完了（新規 ${pending.length} 件）`)}else{alert(`同期失敗 (${res.status})`)}
-  }catch(e){alert("同期エラー: "+e.message); logSync("例外: "+e.message)}
-});
-async function syncNewTxs(){
-  const url=localStorage.getItem(WKEY)||""; if(!url) return;
-  const pending=txs.filter(t=>t.synced!==true); if(!pending.length) return;
-  try{
-    const res=await fetchWithTimeout(url,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({txs:pending})},15000);
-    const text=await res.text().catch(()=>"(no body)"); logSync(`自動同期: HTTP ${res.status}\n${text}`);
-    if(res.ok){const ids=new Set(pending.map(t=>t.id)); txs=txs.map(t=>ids.has(t.id)?{...t,synced:true}:t); write(LS_T,txs)}
-  }catch(e){logSync("自動同期 例外: "+e.message)}
+/* ========= GAS同期 ========= */
+async function fetchWithTimeout(input,init={},ms=15000){
+  const ctrl=new AbortController(); const id=setTimeout(()=>ctrl.abort(),ms);
+  try{ return await fetch(input,{...init,signal:ctrl.signal}); } finally{ clearTimeout(id); }
 }
-els.autoSync.checked=read(LS_AUTOSYNC,false);
-els.autoSync.addEventListener("change",()=>{write(LS_AUTOSYNC,els.autoSync.checked); if(els.autoSync.checked){txs=txs.map(t=>t.synced? t : {...t,synced:true}); write(LS_T,txs); logSync("自動同期ON（既存取引は同期済み扱い）")}else{logSync("自動同期OFF")}});
-
-/* ========= 危険操作 ========= */
-els.wipeTx.addEventListener("click",()=>{if(!confirm("取引データを全消去します。よろしいですか？"))return; txs=[]; write(LS_T,txs); cart=[]; renderCart(); renderSummary(); renderItemAgg(); renderCreditList(); logSync("取引データを消去")});
-els.wipeAll.addEventListener("click",()=>{if(!confirm("商品と取引の全データを初期化します。よろしいですか？"))return; localStorage.removeItem(LS_T); localStorage.removeItem(LS_I); alert("初期化しました。再読み込みします"); location.reload()});
-
-/* ========= 新規商品/デモ ========= */
-els.newItemBtn.addEventListener("click",()=>{els.newForm.style.display=els.newForm.style.display==='none'?'flex':'none'});
-els.addItem.addEventListener("click",()=>{
-  const name=els.newName.value.trim(), price=Number((els.newPrice.value||"").replace(/[^0-9]/g,"")), stock=Number((els.newStock.value||"").replace(/[^0-9]/g,"")), sku=els.newSku.value.trim(), cat=els.newCat.value.trim();
-  if(!name){alert("商品名は必須です");return}
-  items=[{id:crypto.randomUUID(),name,price,stock,sku,cat,dPct:0,dYen:0},...items]; write(LS_I,items);
-  els.newName.value=els.newPrice.value=els.newStock.value=els.newSku.value=els.newCat.value=""; renderCatalog(); refreshCatOptions();
-});
-els.resetDemo.addEventListener("click",()=>{
-  if(!confirm("デモ商品を入れ直します（上書き）")) return;
-  items=[
-    {id:crypto.randomUUID(),name:"じゃがバター",price:400,stock:200,sku:"JGBTR",cat:"フード",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"塩バター（トッピング）",price:50,stock:300,sku:"TOP-SALT",cat:"フード",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",cat:"フード",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",cat:"ドリンク",dPct:0,dYen:0}
-  ];
-  write(LS_I,items); renderCatalog(); refreshCatOptions();
+els.syncGoogle.addEventListener("click", async ()=>{
+  let url = localStorage.getItem(WKEY) || "";
+  url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（必ず /exec）", url);
+  if (!url) return;
+  localStorage.setItem(WKEY, url);
+  try{
+    const ping = await fetchWithTimeout(url, {method:"GET", cache:"no-store"}, 8000);
+    const pingText = await ping.text().catch(()=>"(no body)");
+    logSync(`PING: HTTP ${ping.status}\n${pingText}`);
+    if(!ping.ok){ alert(`同期エラー: /exec 応答 ${ping.status}\n${pingText}`); return; }
+    const res = await fetchWithTimeout(url, {
+      method:"POST", headers:{ "Content-Type":"text/plain" },
+      body: JSON.stringify({ txs })
+    }, 15000);
+    const text = await res.text().catch(()=>"(no body)");
+    logSync(`POST: HTTP ${res.status}\n${text}`);
+    alert(res.ok ? "同期完了" : `同期失敗 (${res.status})`);
+  }catch(e){ alert("同期エラー: "+e.message); logSync("例外: "+e.message); }
 });
 
-/* ========= 表示日 ========= */
-(function(){const today=new Date(); els.viewDate.value=yyyyMMdd(today); els.todayS.textContent=today.toLocaleDateString("ja-JP")})();
-els.viewDate.addEventListener("change",()=>{const d=selectedDate(); els.todayS.textContent=d.toLocaleDateString("ja-JP"); renderSummary(); renderItemAgg()});
-els.viewToday.addEventListener("click",()=>{const t=new Date(); els.viewDate.value=yyyyMMdd(t); els.todayS.textContent=t.toLocaleDateString("ja-JP"); renderSummary(); renderItemAgg()});
+/* ========= オンスクリーンテンキー ========= */
+(function buildNumpad(){
+  const nums=['7','8','9','4','5','6','1','2','3','0','C','⏎'];
+  els.numpad.innerHTML = nums.map(n=>`<button data-k="${n}">${n}</button>`).join('');
+  let targetInput = els.cashReceived;
+  [els.cashReceived, els.discountPct, els.discountYen].forEach(inp=>inp.addEventListener('focus',()=>targetInput=inp));
+  els.numpad.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    const k=b.dataset.k;
+    if(k==='C'){ targetInput.value=''; }
+    else if(k==='⏎'){ renderCart(); }
+    else { targetInput.value = (targetInput.value||'') + k; }
+    targetInput.dispatchEvent(new Event('input'));
+  }));
+})();
+
+/* ========= 日付レンジ ========= */
+function initRange(){
+  els.viewDateFrom.value = misc.viewFrom || ymd(new Date());
+  els.viewDateTo.value = misc.viewTo || ymd(new Date());
+}
+[els.viewDateFrom,els.viewDateTo].forEach(el=>el.addEventListener('change',()=>{misc.viewFrom=els.viewDateFrom.value; misc.viewTo=els.viewDateTo.value; write(LS_MISC,misc); refreshAll(); renderCredit()}));
+els.viewToday.addEventListener('click',()=>{const t=ymd(new Date()); els.viewDateFrom.value=t; els.viewDateTo.value=t; misc.viewFrom=t; misc.viewTo=t; write(LS_MISC,misc); refreshAll(); renderCredit()});
+
+/* ========= 全体再描画 ========= */
+function refreshAll(){renderSummary(); renderItemAgg(); drawDashboard(); calcStockWarnings(); renderHistory()}
 
 /* ========= 初期描画 ========= */
-function init(){renderCatalog(); renderCart(); renderSummary(); renderItemAgg(); refreshCatOptions(); renderCreditList()}
+function init(){
+  applyTheme();
+  els.cashier.value = read("x_cashier",""); els.cashier.addEventListener("input",()=>localStorage.setItem("x_cashier",JSON.stringify(els.cashier.value)));
+  const goalSaved=read("x_goal",""); if(goalSaved) els.goal.value=goalSaved; els.goal.addEventListener("input",()=>localStorage.setItem("x_goal",JSON.stringify((els.goal.value||"").replace(/[^0-9]/g,""))));
+  const lowSaved=read("x_low",""); if(lowSaved) els.low.value=lowSaved; els.low.addEventListener("input",()=>localStorage.setItem("x_low",JSON.stringify((els.low.value||"").replace(/[^0-9]/g,""))));
+  els.search.addEventListener("input",renderCatalog);
+  els.catFilter.addEventListener("change",renderCatalog);
+  gid("newItemBtn").addEventListener("click",()=>{ els.newForm.style.display = els.newForm.style.display==='none'?'flex':'none'; });
+  gid("addItem").addEventListener("click",()=>{
+    const name=els.newName.value.trim();
+    const price=parseNum(els.newPrice.value); const stock=parseNum(els.newStock.value);
+    const sku=els.newSku.value.trim(); const cat=els.newCat.value.trim();
+    if(!name){alert("商品名は必須です");return}
+    items=[{id:crypto.randomUUID(),name,price,stock,sku,cat,dPct:0,dYen:0},...items];
+    write(LS_I,items);
+    els.newName.value=els.newPrice.value=els.newStock.value=els.newSku.value=els.newCat.value="";
+    renderCatalog(); refreshCatOptions();
+  });
+  els.resetDemo.addEventListener("click",()=>{
+    if(!confirm("デモ商品を入れ直します。既存の商品は上書きされます。")) return;
+    items=[
+      {id:crypto.randomUUID(),name:"じゃがバター",price:400,stock:200,sku:"JGBTR",cat:"フード",dPct:0,dYen:0},
+      {id:crypto.randomUUID(),name:"塩バター（トッピング）",price:50,stock:300,sku:"TOP-SALT",cat:"フード",dPct:0,dYen:0},
+      {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",cat:"フード",dPct:0,dYen:0},
+      {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",cat:"ドリンク",dPct:0,dYen:0}
+    ];
+    write(LS_I,items); renderCatalog(); refreshCatOptions();
+  });
+
+  refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit();
+  initRange();
+  write(LS_I,items); write(LS_T,txs); write(LS_MISC,misc);
+}
 init();
 </script>
 </body>
