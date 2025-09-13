@@ -4,9 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>駒場祭POS（完全版＋右上プレビュー）</title>
+<title>駒場祭POS（カテゴリ横スクロール対応 完全版）</title>
 <style>
-  :root{--bg:#fafafa;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111;--accent:#111}
+  :root{--bg:#fafafa;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111;--accent:#111;--tile-min:160px}
   [data-theme="dark"]{--bg:#0b0f14;--card:#0f141a;--border:#1f2937;--muted:#a3a3a3;--ink:#f8fafc;--accent:#36a3ff}
   *{box-sizing:border-box;font-family:system-ui,-apple-system,"Noto Sans JP",Segoe UI,Roboto,Helvetica,Arial}
   body{margin:0;background:var(--bg);color:var(--ink)}
@@ -17,14 +17,14 @@
   input,select,button,textarea{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--card);color:var(--ink)}
   textarea{width:100%;min-height:64px}
   input::placeholder,textarea::placeholder{color:var(--muted)}
-  button{cursor:pointer;font-size:16px} /* iOS拡大対策: 16px以上 */
+  button{cursor:pointer;font-size:16px}
   button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
   button.ghost{background:transparent}
   button.danger{background:transparent;border-color:#ef4444;color:#ef4444}
   .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-top:12px}
   .muted{color:var(--muted);font-size:12px}
   .tag{border:1px solid var(--border);border-radius:999px;padding:0 8px;font-size:11px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--tile-min),1fr));gap:8px}
   .tile{display:flex;flex-direction:column;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;align-items:flex-start}
   .name{font-weight:700}
   .footbar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--border);padding:8px 12px;z-index:10}
@@ -41,33 +41,6 @@
   .warn{color:#f59e0b}
   .dangerText{color:#ef4444}
   canvas{max-width:100%;background:transparent}
-/* ヘッダー/フッターの表示切替（スライド） */
-header, .footbar { transition: transform .2s ease, opacity .2s ease; will-change: transform; }
-body.pos-hide-header header { transform: translateY(-100%); }
-body.pos-hide-footbar .footbar { transform: translateY(100%); }
-
-/* 余白調整（安全域も考慮） */
-:root { --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-top: env(safe-area-inset-top, 0px); }
-body:not(.pos-hide-header) main { padding-top: 10px; } /* 既存どおり */
-body.pos-hide-header main { padding-top: calc(10px + var(--safe-top)); }
-body:not(.pos-hide-footbar) main { padding-bottom: 180px; } /* 既存どおり */
-body.pos-hide-footbar main { padding-bottom: 16px; }
-
-/* 右側に出す小さな浮遊トグルボタン群（スマホ親指届きやすい） */
-#uiToggles {
-  position: fixed; right: 8px;
-  bottom: calc(84px + var(--safe-bottom)); /* フッターの少し上に */
-  display: flex; flex-direction: column; gap: 6px; z-index: 1000;
-}
-#uiToggles button {
-  border-radius: 999px; padding: 8px 10px; font-size: 14px;
-  background: rgba(0,0,0,.75); color: #fff; border: none;
-}
-#uiToggles button.secondary { background: rgba(0,0,0,.55); }
-@media (prefers-color-scheme: dark) {
-  #uiToggles button { background: rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.18); }
-  #uiToggles button.secondary { background: rgba(255,255,255,.08); }
-}
 
   /* 右上プレビュー（スマホ縦で見やすい固定） */
   #numpadPreview{
@@ -77,6 +50,37 @@ body.pos-hide-footbar main { padding-bottom: 16px; }
     box-shadow:0 2px 6px rgba(0,0,0,0.3);
   }
   #numpadPreview.flash{ transform:scale(1.15); transition:transform .12s ease; }
+
+  /* コンパクト表示 */
+  body.compact .tile { padding:10px; border-radius:10px }
+  body.compact .tile .name { font-size:14px }
+  body.compact .tile .muted { font-size:10px }
+  body.compact .tile button { padding:6px 8px; font-size:14px }
+
+  /* カテゴリ横スクロールチップバー */
+  .chipbar{
+    display:flex; gap:6px; align-items:center;
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+    padding:6px 2px;
+    scrollbar-width:none;
+  }
+  .chipbar::-webkit-scrollbar{display:none}
+  .chip{white-space:nowrap;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:14px;cursor:pointer;user-select:none}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .chip.count::after{content:attr(data-count);margin-left:6px;font-size:12px;opacity:.9}
+
+  /* ヘッダー/フッター隠しトグル（前回のPOSモード用） */
+  header, .footbar { transition: transform .2s ease, opacity .2s ease; will-change: transform; }
+  body.pos-hide-header header { transform: translateY(-100%); }
+  body.pos-hide-footbar .footbar { transform: translateY(100%); }
+  :root { --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-top: env(safe-area-inset-top, 0px); }
+  body.pos-hide-header main { padding-top: calc(10px + var(--safe-top)); }
+  body.pos-hide-footbar main { padding-bottom: 16px; }
+
+  /* 右の浮遊ボタン（POSモード切替） */
+  #uiToggles { position: fixed; right: 8px; bottom: calc(84px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 1000; }
+  #uiToggles button { border-radius: 999px; padding: 8px 10px; font-size: 14px; background: rgba(0,0,0,.75); color: #fff; border: none; }
+  #uiToggles button.secondary { background: rgba(0,0,0,.55); }
 
   html, body { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
   * { -webkit-tap-highlight-color: transparent; }
@@ -92,16 +96,18 @@ body.pos-hide-footbar main { padding-bottom: 16px; }
       <input id="cashier" placeholder="担当者" style="max-width:150px">
       <button id="btnFS">全画面</button>
       <button id="btnTheme">ダーク</button>
+      <button id="btnAutoPOS">自動POS: ON</button>
     </div>
   </div>
   <div class="row" style="margin-top:6px">
     <input id="search" placeholder="商品検索 (例: じゃが / SKU)" style="min-width:180px;flex:1">
-    <select id="catFilter"><option value="">すべてのカテゴリ</option></select>
-    <input id="viewDateFrom" type="date" style="max-width:160px">
-    <span class="muted">〜</span>
-    <input id="viewDateTo" type="date" style="max-width:160px">
-    <button id="viewToday">今日</button>
+    <select id="catFilter" style="display:none"><option value="">すべて</option></select>
+    <button id="viewDense" title="コンパクト表示の切替">密度</button>
+    <button id="colsDec" title="列数を減らす">－列</button>
+    <button id="colsInc" title="列数を増やす">＋列</button>
   </div>
+  <!-- 横スクロールのカテゴリチップ -->
+  <div id="catChips" class="chipbar" aria-label="カテゴリ"></div>
 </header>
 
 <main>
@@ -158,7 +164,7 @@ body.pos-hide-footbar main { padding-bottom: 16px; }
     </div>
   </section>
 
-  <!-- サマリ（期間集計＋KPI） -->
+  <!-- サマリ（期間） -->
   <section class="card">
     <div style="font-weight:600">サマリ（期間集計） <span id="rangeS"></span></div>
     <div id="summary"></div>
@@ -288,12 +294,13 @@ body.pos-hide-footbar main { padding-bottom: 16px; }
     <pre id="syncLog" style="margin-top:8px">【同期ログ】ここに詳細が出ます</pre>
   </section>
 </main>
-<!-- 画面UIトグル（個別に隠す/戻す） -->
+
+<!-- UIトグル（ヘッダー/会計バー） -->
 <div id="uiToggles" aria-label="表示切替">
   <button id="toggleHeader">↑ ヘッダー非表示</button>
   <button id="toggleFootbar" class="secondary">↓ 会計バー非表示</button>
 </div>
-      
+
 <!-- 右上プレビューボックス -->
 <div id="numpadPreview"></div>
 
@@ -336,7 +343,7 @@ function logSync(t){gid("syncLog").textContent="【同期ログ】\n"+t}
 /* ========= 要素参照 ========= */
 const els={
   goal:gid("goal"),low:gid("lowStock"),cashier:gid("cashier"),
-  search:gid("search"),catFilter:gid("catFilter"),
+  search:gid("search"),catFilter:gid("catFilter"),catChips:gid("catChips"),
   catalog:gid("catalog"),cartLines:gid("cartLines"),cartTotal:gid("cartTotal"),
   discountPct:gid("discountPct"),discountYen:gid("discountYen"),
   pay:gid("pay"),commit:gid("commit"),refund:gid("refund"),clearBtn:gid("clear"),
@@ -362,7 +369,8 @@ const els={
   // 在庫テーブルUI
   stockList: gid("stockList"), stockAll: gid("stockAll"), stockFilter: gid("stockFilter"),
   stockQtyBulk: gid("stockQtyBulk"), stockApplyBulk: gid("stockApplyBulk"),
-  btnRestockMany: gid("btnRestockMany"), btnWasteMany: gid("btnWasteMany"), btnStockClear: gid("btnStockClear")
+  btnRestockMany: gid("btnRestockMany"), btnWasteMany: gid("btnWasteMany"), btnStockClear: gid("btnStockClear"),
+  btnAutoPOS: gid("btnAutoPOS"), viewDense: gid("viewDense"), colsInc: gid("colsInc"), colsDec: gid("colsDec")
 };
 
 /* ========= 状態 ========= */
@@ -377,25 +385,61 @@ let cart=[];
 let misc=read(LS_MISC,{
   theme:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light',
   sale:{start:"",end:"",pct:0}, combo:{price:0}, volume:{n:0,pct:0},
-  reminders:[], viewFrom:ymd(new Date()), viewTo:ymd(new Date())
+  reminders:[], viewFrom:ymd(new Date()), viewTo:ymd(new Date()),
+  uiHideHeader:false, uiHideFoot:false,
+  dense:false, tileMin:160,
+  autoPOS:true
 });
 
-/* ========= テーマ/FS ========= */
+/* ========= テーマ/FS/表示調整 ========= */
 function applyTheme(){document.documentElement.setAttribute('data-theme', misc.theme==='dark'?'dark':'light'); els.btnTheme.textContent=(misc.theme==='dark'?'ライト':'ダーク')}
 els.btnTheme.addEventListener('click',()=>{misc.theme=misc.theme==='dark'?'light':'dark'; write(LS_MISC,misc); applyTheme()})
 els.btnFS.addEventListener('click',()=>{if(!document.fullscreenElement){document.documentElement.requestFullscreen?.()}else{document.exitFullscreen?.()}})
-
-/* ========= カタログ ========= */
-function refreshCatOptions(){
-  const cats=[...new Set(items.map(i=>i.cat).filter(Boolean))];
-  els.catFilter.innerHTML='<option value="">すべてのカテゴリ</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');
+function applyCatalogView(){
+  document.body.classList.toggle('compact', !!misc.dense);
+  document.documentElement.style.setProperty('--tile-min', (misc.tileMin||160)+'px');
+  if(els.viewDense) els.viewDense.textContent = misc.dense ? '密度:高' : '密度';
 }
+function changeCols(delta){ misc.tileMin = Math.min(260, Math.max(120, (misc.tileMin||160) + delta)); write(LS_MISC,misc); applyCatalogView(); }
+els.viewDense?.addEventListener('click',()=>{misc.dense=!misc.dense; write(LS_MISC,misc); applyCatalogView();});
+els.colsInc?.addEventListener('click',()=>changeCols(-20));
+els.colsDec?.addEventListener('click',()=>changeCols(+20));
+
+/* ========= カテゴリ横スクロール（チップ） ========= */
+let activeCat = ""; // ""=すべて
+function buildCatChips(){
+  const counts = {};
+  items.forEach(it=>{ const c=it.cat||"未分類"; counts[c]=(counts[c]||0)+1; });
+  const keys = ["すべて", ...Object.keys(counts)];
+  els.catChips.innerHTML = keys.map(k=>{
+    const lab = k==="すべて" ? "すべて" : k;
+    const cnt = k==="すべて" ? items.length : counts[k];
+    const active = (k==="すべて" && !activeCat) || (k!=="すべて" && activeCat===k);
+    return `<div class="chip ${active?'active':''} count" data-cat="${esc(k)}" data-count="${cnt}">${esc(lab)}</div>`;
+  }).join("");
+  els.catChips.querySelectorAll('.chip').forEach(ch=>{
+    ch.addEventListener('click',()=>{
+      const c = ch.dataset.cat;
+      activeCat = (c==="すべて") ? "" : c;
+      // 見た目反映
+      els.catChips.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active', x===ch));
+      renderCatalog();
+    });
+  });
+}
+function refreshCatOptions(){ // 既存selectは非表示運用だが中身は更新しておく
+  const cats=[...new Set(items.map(i=>i.cat||"未分類"))];
+  els.catFilter.innerHTML='<option value="">すべて</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');
+  buildCatChips();
+}
+
+/* ========= 商品一覧 ========= */
 function renderCatalog(){
-  const q=(els.search.value||"").toLowerCase(); const catSel=els.catFilter.value||"";
+  const q=(els.search.value||"").toLowerCase();
   const threshold=parseNum(els.low?.value||0);
   els.catalog.innerHTML="";
   items.filter(it=>{
-    if(catSel && it.cat!==catSel) return false;
+    if(activeCat && (it.cat||"未分類")!==activeCat) return false;
     if(!q) return true;
     return (it.name+" "+(it.sku||"")).toLowerCase().includes(q);
   }).forEach((it,idx)=>{
@@ -408,7 +452,7 @@ function renderCatalog(){
         ${low?'<span class="tag warn" style="margin-left:6px">残りわずか</span>':''}
         ${soldOut?'<span class="tag dangerText" style="margin-left:6px">売切れ</span>':''}
       </div>
-      <div class="muted" style="font-size:11px">${it.cat?('カテゴリ:'+esc(it.cat)+'　'):""}${it.sku?('SKU:'+esc(it.sku)):""}</div>
+      <div class="muted" style="font-size:11px">${(it.cat?('カテゴリ:'+esc(it.cat)+'　'):"")}${it.sku?('SKU:'+esc(it.sku)):""}</div>
       <div class="row" style="margin-top:6px">
         <button class="primary" data-add="${it.id}" ${soldOut?'disabled':''}>＋ 追加</button>
         <span class="muted">デフォ割</span>
@@ -430,6 +474,7 @@ function renderCatalog(){
   });
   renderStockList();
 }
+
 function editItem(id){
   const i=items.findIndex(x=>x.id===id); if(i<0) return;
   const it=items[i];
@@ -454,7 +499,7 @@ function lineAfterDisc(l){
   const disc=Math.min(base,Math.floor(base*pct/100)+yen); return base-disc;
 }
 function applyPromotions(subAfterLine){
-  const now=new Date(); const st=misc.sale.start, ed=misc.sale.end, pct=parseNum(misc.sale.pct)||0;
+  const now=new Date(); const st=misc.sale?.start, ed=misc.sale?.end, pct=parseNum(misc.sale?.pct)||0;
   let timeDisc=0;
   if(st && ed){
     const [sh,sm]=st.split(":").map(Number); const [eh,em]=ed.split(":").map(Number);
@@ -640,7 +685,7 @@ function getSelectedStockOps(){
   const mapQty = {};
   els.stockList.querySelectorAll('.stockQtyInput').forEach(inp=>{
     const v = parseNum(inp.value); if (v>0) mapQty[inp.dataset.id] = v;
-    inp.addEventListener('input',()=>updatePreview(inp.value)); // 入力→右上に反映
+    inp.addEventListener('input',()=>updatePreview(inp.value));
   });
   return ids.map(id => ({ id, qty: mapQty[id] ?? 1 }));
 }
@@ -812,7 +857,7 @@ setInterval(()=>{
   });
 }, 5000);
 
-/* ========= バックアップ ========= */
+/* ========= バックアップ/CSV/GAS同期 ========= */
 els.backupSave.addEventListener('click',()=>{
   const blob=new Blob([JSON.stringify({items,txs,misc},null,2)],{type:"application/json"});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pos_backup.json'; a.click();
@@ -826,13 +871,11 @@ els.backupLoad.addEventListener('change',e=>{
       if(obj.txs) txs=obj.txs;
       if(obj.misc) misc=obj.misc;
       write(LS_I,items); write(LS_T,txs); write(LS_MISC,misc);
-      applyTheme(); initRange(); refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit(); renderStockList();
+      applyTheme(); initRange(); refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit(); renderStockList(); applyCatalogView();
       alert("バックアップを読み込みました");
     }catch(e){alert("読込エラー: "+e.message)}
   }; rd.readAsText(f);
 });
-
-/* ========= CSV ========= */
 els.exportItems.addEventListener("click",()=>{
   const rows=[["name","price","stock","sku","cat","dPct","dYen"]];
   items.forEach(it=>rows.push([it.name,it.price,it.stock||0,it.sku||"",it.cat||"",it.dPct||0,it.dYen||0]));
@@ -853,7 +896,7 @@ els.importItems.addEventListener("change",e=>{
       const c=r.split(",");
       return {id:crypto.randomUUID(),name:c[iName],price:Number(c[iPrice]),stock:Number(c[iStock]||0),sku:c[iSku]||"",cat:(iCat>=0?c[iCat]:""),dPct:Number(c[iDPct]||0),dYen:Number(c[iDYen]||0)};
     }).filter(x=>x.name && !isNaN(x.price));
-    write(LS_I,items); renderCatalog(); renderItemAgg(); refreshCatOptions(); renderStockList();
+    write(LS_I,items); refreshCatOptions(); renderCatalog(); renderItemAgg(); renderStockList();
   };
   reader.readAsText(f);
 });
@@ -868,8 +911,6 @@ els.exportTx.addEventListener("click",()=>{
   });
   const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="transactions.csv"; a.click();
 });
-
-/* ========= GAS同期 ========= */
 async function fetchWithTimeout(input,init={},ms=15000){
   const ctrl=new AbortController(); const id=setTimeout(()=>ctrl.abort(),ms);
   try{ return await fetch(input,{...init,signal:ctrl.signal}); } finally{ clearTimeout(id); }
@@ -906,8 +947,7 @@ function updatePreview(value){
 (function buildNumpad(){
   const nums=['7','8','9','4','5','6','1','2','3','0','C','⏎'];
   els.numpad.innerHTML = nums.map(n=>`<button data-k="${n}">${n}</button>`).join('');
-  let targetInput = els.cashReceived; // 初期は受取欄
-  // 数値入力系でフォーカス時にターゲット更新＋プレビュー更新
+  let targetInput = els.cashReceived;
   [els.cashReceived, els.discountPct, els.discountYen, els.stockQtyBulk].forEach(inp=>{
     inp.addEventListener('focus',()=>{targetInput=inp; updatePreview(inp.value)});
     inp.addEventListener('input',()=>updatePreview(inp.value));
@@ -918,10 +958,44 @@ function updatePreview(value){
     if(k==='C'){ targetInput.value=''; }
     else if(k==='⏎'){ /*確定*/ }
     else { targetInput.value = (targetInput.value||'') + k; }
-    targetInput.dispatchEvent(new Event('input')); // プレビューも更新
+    targetInput.dispatchEvent(new Event('input'));
     beep(); if (navigator.vibrate) navigator.vibrate(20);
   }));
 })();
+
+/* ========= 画面UIトグル（POSモード） ========= */
+function applyChromeVisibility(){
+  document.body.classList.toggle('pos-hide-header', !!misc.uiHideHeader);
+  document.body.classList.toggle('pos-hide-footbar', !!misc.uiHideFoot);
+  const bh = document.getElementById('toggleHeader');
+  const bf = document.getElementById('toggleFootbar');
+  if (bh) bh.textContent = misc.uiHideHeader ? '↓ ヘッダー再表示' : '↑ ヘッダー非表示';
+  if (bf) bf.textContent = misc.uiHideFoot ? '↑ 会計バー再表示' : '↓ 会計バー非表示';
+}
+document.getElementById('toggleHeader')?.addEventListener('click', ()=>{ misc.uiHideHeader = !misc.uiHideHeader; write(LS_MISC, misc); applyChromeVisibility(); localStorage.setItem('x_ui_touched','1');});
+document.getElementById('toggleFootbar')?.addEventListener('click', ()=>{ misc.uiHideFoot = !misc.uiHideFoot; write(LS_MISC, misc); applyChromeVisibility(); localStorage.setItem('x_ui_touched','1');});
+
+/* 自動POSモード */
+function shouldAutoPOS(){
+  const smallScreen = window.matchMedia('(max-width: 480px)').matches;
+  const tallPortrait = window.matchMedia('(orientation: portrait)').matches && window.innerHeight < 760;
+  const isStandalone = (window.matchMedia('(display-mode: standalone)').matches) || (window.navigator.standalone === true);
+  return smallScreen || tallPortrait || isStandalone;
+}
+function applyAutoPOSIfNeeded(){
+  if (!misc.autoPOS) return;
+  const touched = localStorage.getItem('x_ui_touched') === '1';
+  if (!touched && shouldAutoPOS()){
+    misc.uiHideHeader = true; misc.uiHideFoot = true; write(LS_MISC, misc); applyChromeVisibility();
+  }
+}
+if(els.btnAutoPOS){
+  const reflect=()=>{els.btnAutoPOS.textContent='自動POS: '+(misc.autoPOS?'ON':'OFF')};
+  reflect();
+  els.btnAutoPOS.addEventListener('click',()=>{misc.autoPOS=!misc.autoPOS; write(LS_MISC,misc); reflect(); applyAutoPOSIfNeeded();});
+}
+window.addEventListener('orientationchange', ()=>applyAutoPOSIfNeeded());
+window.addEventListener('resize', ()=>applyAutoPOSIfNeeded());
 
 /* ========= 日付レンジ ========= */
 function initRange(){ els.viewDateFrom.value = misc.viewFrom || ymd(new Date()); els.viewDateTo.value = misc.viewTo || ymd(new Date()); }
@@ -931,36 +1005,14 @@ els.viewToday.addEventListener('click',()=>{const t=ymd(new Date()); els.viewDat
 /* ========= 全体再描画 ========= */
 function refreshAll(){renderSummary(); renderItemAgg(); drawDashboard(); calcStockWarnings(); renderHistory()}
 
-// === 画面UIトグル（ヘッダー/会計バーを個別に隠す） ===
-function applyChromeVisibility(){
-  document.body.classList.toggle('pos-hide-header', !!misc.uiHideHeader);
-  document.body.classList.toggle('pos-hide-footbar', !!misc.uiHideFoot);
-  // ボタンのラベル更新（HTMLに #uiToggles がある前提）
-  const bh = document.getElementById('toggleHeader');
-  const bf = document.getElementById('toggleFootbar');
-  if (bh) bh.textContent = misc.uiHideHeader ? '↓ ヘッダー再表示' : '↑ ヘッダー非表示';
-  if (bf) bf.textContent = misc.uiHideFoot ? '↑ 会計バー再表示' : '↓ 会計バー非表示';
-}
-
-// クリックで切替
-document.getElementById('toggleHeader')?.addEventListener('click', ()=>{
-  misc.uiHideHeader = !misc.uiHideHeader;
-  write(LS_MISC, misc);
-  applyChromeVisibility();
-});
-document.getElementById('toggleFootbar')?.addEventListener('click', ()=>{
-  misc.uiHideFoot = !misc.uiHideFoot;
-  write(LS_MISC, misc);
-  applyChromeVisibility();
-});
 /* ========= 初期描画 ========= */
 function init(){
-  applyTheme();
+  applyTheme(); applyCatalogView();
   els.cashier.value = read("x_cashier",""); els.cashier.addEventListener("input",()=>localStorage.setItem("x_cashier",JSON.stringify(els.cashier.value)));
   const goalSaved=read("x_goal",""); if(goalSaved) els.goal.value=goalSaved; els.goal.addEventListener("input",()=>localStorage.setItem("x_goal",JSON.stringify((els.goal.value||"").replace(/[^0-9]/g,""))));
   const lowSaved=read("x_low",""); if(lowSaved) els.low.value=lowSaved; els.low.addEventListener("input",()=>localStorage.setItem("x_low",JSON.stringify((els.low.value||"").replace(/[^0-9]/g,""))));
   els.search.addEventListener("input",renderCatalog);
-  els.catFilter.addEventListener("change",renderCatalog);
+  refreshCatOptions();
   gid("newItemBtn").addEventListener("click",()=>{ els.newForm.style.display = els.newForm.style.display==='none'?'flex':'none'; });
   gid("addItem").addEventListener("click",()=>{
     const name=els.newName.value.trim(); const price=parseNum(els.newPrice.value); const stock=parseNum(els.newStock.value);
@@ -969,7 +1021,7 @@ function init(){
     items=[{id:crypto.randomUUID(),name,price,stock,sku,cat,dPct:0,dYen:0},...items];
     write(LS_I,items);
     els.newName.value=els.newPrice.value=els.newStock.value=els.newSku.value=els.newCat.value="";
-    renderCatalog(); refreshCatOptions(); renderStockList();
+    refreshCatOptions(); renderCatalog(); renderStockList();
   });
   els.resetDemo.addEventListener("click",()=>{
     if(!confirm("デモ商品を入れ直します。既存の商品は上書きされます。")) return;
@@ -979,18 +1031,17 @@ function init(){
       {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",cat:"フード",dPct:0,dYen:0},
       {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",cat:"ドリンク",dPct:0,dYen:0}
     ];
-    write(LS_I,items); renderCatalog(); refreshCatOptions(); renderStockList();
+    write(LS_I,items); refreshCatOptions(); renderCatalog(); renderStockList();
   });
 
-  refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit();
+  renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit();
   initRange(); renderStockList();
   write(LS_I,items); write(LS_T,txs); write(LS_MISC,misc);
-      // フラグが未定義のときの初期値（安全策）
-if (misc.uiHideHeader === undefined) misc.uiHideHeader = false;
-if (misc.uiHideFoot   === undefined) misc.uiHideFoot   = false;
 
-// 画面の表示/非表示状態を今の設定で反映
-applyChromeVisibility();
+  if (misc.uiHideHeader === undefined) misc.uiHideHeader = false;
+  if (misc.uiHideFoot   === undefined) misc.uiHideFoot   = false;
+  applyChromeVisibility();
+  applyAutoPOSIfNeeded();
 }
 init();
 
