@@ -41,6 +41,33 @@
   .warn{color:#f59e0b}
   .dangerText{color:#ef4444}
   canvas{max-width:100%;background:transparent}
+/* ヘッダー/フッターの表示切替（スライド） */
+header, .footbar { transition: transform .2s ease, opacity .2s ease; will-change: transform; }
+body.pos-hide-header header { transform: translateY(-100%); }
+body.pos-hide-footbar .footbar { transform: translateY(100%); }
+
+/* 余白調整（安全域も考慮） */
+:root { --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-top: env(safe-area-inset-top, 0px); }
+body:not(.pos-hide-header) main { padding-top: 10px; } /* 既存どおり */
+body.pos-hide-header main { padding-top: calc(10px + var(--safe-top)); }
+body:not(.pos-hide-footbar) main { padding-bottom: 180px; } /* 既存どおり */
+body.pos-hide-footbar main { padding-bottom: 16px; }
+
+/* 右側に出す小さな浮遊トグルボタン群（スマホ親指届きやすい） */
+#uiToggles {
+  position: fixed; right: 8px;
+  bottom: calc(84px + var(--safe-bottom)); /* フッターの少し上に */
+  display: flex; flex-direction: column; gap: 6px; z-index: 1000;
+}
+#uiToggles button {
+  border-radius: 999px; padding: 8px 10px; font-size: 14px;
+  background: rgba(0,0,0,.75); color: #fff; border: none;
+}
+#uiToggles button.secondary { background: rgba(0,0,0,.55); }
+@media (prefers-color-scheme: dark) {
+  #uiToggles button { background: rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.18); }
+  #uiToggles button.secondary { background: rgba(255,255,255,.08); }
+}
 
   /* 右上プレビュー（スマホ縦で見やすい固定） */
   #numpadPreview{
@@ -261,7 +288,12 @@
     <pre id="syncLog" style="margin-top:8px">【同期ログ】ここに詳細が出ます</pre>
   </section>
 </main>
-
+<!-- 画面UIトグル（個別に隠す/戻す） -->
+<div id="uiToggles" aria-label="表示切替">
+  <button id="toggleHeader">↑ ヘッダー非表示</button>
+  <button id="toggleFootbar" class="secondary">↓ 会計バー非表示</button>
+</div>
+      
 <!-- 右上プレビューボックス -->
 <div id="numpadPreview"></div>
 
@@ -899,6 +931,28 @@ els.viewToday.addEventListener('click',()=>{const t=ymd(new Date()); els.viewDat
 /* ========= 全体再描画 ========= */
 function refreshAll(){renderSummary(); renderItemAgg(); drawDashboard(); calcStockWarnings(); renderHistory()}
 
+// === 画面UIトグル（ヘッダー/会計バーを個別に隠す） ===
+function applyChromeVisibility(){
+  document.body.classList.toggle('pos-hide-header', !!misc.uiHideHeader);
+  document.body.classList.toggle('pos-hide-footbar', !!misc.uiHideFoot);
+  // ボタンのラベル更新（HTMLに #uiToggles がある前提）
+  const bh = document.getElementById('toggleHeader');
+  const bf = document.getElementById('toggleFootbar');
+  if (bh) bh.textContent = misc.uiHideHeader ? '↓ ヘッダー再表示' : '↑ ヘッダー非表示';
+  if (bf) bf.textContent = misc.uiHideFoot ? '↑ 会計バー再表示' : '↓ 会計バー非表示';
+}
+
+// クリックで切替
+document.getElementById('toggleHeader')?.addEventListener('click', ()=>{
+  misc.uiHideHeader = !misc.uiHideHeader;
+  write(LS_MISC, misc);
+  applyChromeVisibility();
+});
+document.getElementById('toggleFootbar')?.addEventListener('click', ()=>{
+  misc.uiHideFoot = !misc.uiHideFoot;
+  write(LS_MISC, misc);
+  applyChromeVisibility();
+});
 /* ========= 初期描画 ========= */
 function init(){
   applyTheme();
@@ -931,6 +985,12 @@ function init(){
   refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit();
   initRange(); renderStockList();
   write(LS_I,items); write(LS_T,txs); write(LS_MISC,misc);
+      // フラグが未定義のときの初期値（安全策）
+if (misc.uiHideHeader === undefined) misc.uiHideHeader = false;
+if (misc.uiHideFoot   === undefined) misc.uiHideFoot   = false;
+
+// 画面の表示/非表示状態を今の設定で反映
+applyChromeVisibility();
 }
 init();
 
