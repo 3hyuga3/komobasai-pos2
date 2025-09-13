@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>駒場祭POS（ツケ対応・未払い合計つき完全版）</title>
+<title>駒場祭POS（ツケ相手 別枠・全部盛り 完全版）</title>
 <style>
   :root{--bg:#fafafa;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111}
   *{box-sizing:border-box;font-family:system-ui,-apple-system,"Noto Sans JP",Segoe UI,Roboto,Helvetica,Arial}
@@ -41,7 +41,7 @@
     <div class="row">
       <input id="goal" inputmode="numeric" placeholder="売上目標(円)" style="max-width:150px">
       <input id="lowStock" inputmode="numeric" placeholder="在庫アラート" style="max-width:120px">
-      <input id="cashier" placeholder="担当者" style="max-width:120px">
+      <input id="cashier" placeholder="担当者" style="max-width:150px">
     </div>
   </div>
   <div class="row" style="margin-top:6px">
@@ -85,18 +85,18 @@
       <label class="muted">円</label>
       <input id="discountYen" inputmode="numeric" placeholder="50" style="max-width:110px">
     </div>
-    <!-- ツケ設定 -->
+    <!-- ツケ設定（別枠） -->
     <div class="row" style="margin-top:8px">
       <label class="row">
-        <input type="checkbox" id="creditFlag"> ツケ（部員向け）
+        <input type="checkbox" id="creditFlag"> ツケ（掛売）
       </label>
-      <input id="creditWho" placeholder="氏名 / 学籍など" style="max-width:220px">
+      <input id="creditWho" placeholder="ツケ相手の氏名 / 学籍" style="max-width:240px">
       <select id="creditStatus">
         <option value="unpaid">未払い</option>
         <option value="paid">支払い済み</option>
       </select>
     </div>
-    <div class="muted" style="margin-top:4px">※ツケにチェックすると「掛売」で記録。在庫は減ります</div>
+    <div class="muted" style="margin-top:4px">※ツケにチェックすると「掛売」で記録（在庫は減ります）。担当者は別フィールドで保持します。</div>
   </section>
 
   <!-- サマリ（表示日） -->
@@ -135,7 +135,7 @@
       <table>
         <thead>
           <tr>
-            <th>氏名</th>
+            <th>氏名（ツケ相手）</th>
             <th>未払い金額</th>
             <th>件数</th>
             <th>明細</th>
@@ -193,7 +193,7 @@ const LS_LOW="komaba_pos_lowstock";
 const WKEY="komaba_pos_gas_webhook_v1";
 const LS_AUTOSYNC="komaba_pos_autosync_v1";
 function gid(id){return document.getElementById(id)}
-function read(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}}
+function read(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d)}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
 function jpy(n){return "¥"+(Math.round(n)||0).toLocaleString("ja-JP")}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m]))}
@@ -245,36 +245,43 @@ els.search.addEventListener("input",renderCatalog);
 els.catFilter.addEventListener("change",renderCatalog);
 
 /* ========= 商品 ========= */
-function refreshCatOptions(){const cats=[...new Set(items.map(i=>i.cat).filter(Boolean))];els.catFilter.innerHTML='<option value="">すべてのカテゴリ</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('')}
+function refreshCatOptions(){
+  const cats=[...new Set(items.map(i=>i.cat).filter(Boolean))];
+  els.catFilter.innerHTML='<option value="">すべてのカテゴリ</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');
+}
 function renderCatalog(){
   const q=(els.search.value||"").toLowerCase(); const catSel=els.catFilter.value||""; const threshold=Number(els.low.value||0);
   els.catalog.innerHTML="";
-  items.filter(it=>{if(catSel && it.cat!==catSel) return false; if(!q) return true; return (it.name+" "+(it.sku||"")).toLowerCase().includes(q)})
-    .forEach((it,idx)=>{
-      const soldOut=it.stock<=0, low=!soldOut&&threshold>0&&it.stock<=threshold;
-      const t=document.createElement("div"); t.className="tile"; t.style.opacity=soldOut?0.6:1;
-      t.innerHTML=`
-        <div class="name">${esc(it.name)}</div>
-        <div class="muted">${jpy(it.price)} / 在庫:${it.stock}
-          ${low?'<span class="tag" style="margin-left:6px;border-color:#f59e0b;color:#b45309">残りわずか</span>':''}
-          ${soldOut?'<span class="tag" style="margin-left:6px;border-color:#ef4444;color:#ef4444">売切れ</span>':''}
-        </div>
-        <div class="muted" style="font-size:11px">${it.cat?('カテゴリ:'+esc(it.cat)+'　'):""}${it.sku?('SKU:'+esc(it.sku)):""}</div>
-        <div class="row" style="margin-top:6px">
-          <button class="primary" data-add="${it.id}" ${soldOut?'disabled':''}>＋ 追加</button>
-          <span class="muted">デフォ割</span>
-          <input class="small" style="max-width:80px" inputmode="numeric" placeholder="% 例:10" data-dpct="${it.id}" value="${it.dPct||''}">
-          <input class="small" style="max-width:100px" inputmode="numeric" placeholder="円 例:50" data-dyen="${it.id}" value="${it.dYen||''}">
-          <button data-edit="${it.id}">編集</button>
-          <button class="danger" data-del="${it.id}">削除</button>
-        </div>`;
-      if(!soldOut) t.querySelector(`[data-add="${it.id}"]`).addEventListener("click",()=>addToCart(it.id));
-      t.querySelector(`[data-dpct="${it.id}"]`).addEventListener("input",e=>{items[idx].dPct=Number((e.target.value||"").replace(/[^0-9]/g,""));write(LS_I,items)});
-      t.querySelector(`[data-dyen="${it.id}"]`).addEventListener("input",e=>{items[idx].dYen=Number((e.target.value||"").replace(/[^0-9]/g,""));write(LS_I,items)});
-      t.querySelector(`[data-edit="${it.id}"]`).addEventListener("click",()=>editItem(it.id));
-      t.querySelector(`[data-del="${it.id}"]`).addEventListener("click",()=>deleteItem(it.id));
-      els.catalog.appendChild(t);
-    });
+  items.filter(it=>{
+    if(catSel && it.cat!==catSel) return false;
+    if(!q) return true;
+    return (it.name+" "+(it.sku||"")).toLowerCase().includes(q);
+  }).forEach((it,idx)=>{
+    const soldOut=it.stock<=0; const low=!soldOut&&threshold>0&&it.stock<=threshold;
+    const t=document.createElement("div");
+    t.className="tile"; t.style.opacity=soldOut?0.6:1;
+    t.innerHTML=`
+      <div class="name">${esc(it.name)}</div>
+      <div class="muted">${jpy(it.price)} / 在庫:${it.stock}
+        ${low?'<span class="tag" style="margin-left:6px;border-color:#f59e0b;color:#b45309">残りわずか</span>':''}
+        ${soldOut?'<span class="tag" style="margin-left:6px;border-color:#ef4444;color:#ef4444">売切れ</span>':''}
+      </div>
+      <div class="muted" style="font-size:11px">${it.cat?('カテゴリ:'+esc(it.cat)+'　'):""}${it.sku?('SKU:'+esc(it.sku)):""}</div>
+      <div class="row" style="margin-top:6px">
+        <button class="primary" data-add="${it.id}" ${soldOut?'disabled':''}>＋ 追加</button>
+        <span class="muted">デフォ割</span>
+        <input class="small" style="max-width:80px" inputmode="numeric" placeholder="% 例:10" data-dpct="${it.id}" value="${it.dPct||''}">
+        <input class="small" style="max-width:100px" inputmode="numeric" placeholder="円 例:50" data-dyen="${it.id}" value="${it.dYen||''}">
+        <button data-edit="${it.id}">編集</button>
+        <button class="danger" data-del="${it.id}">削除</button>
+      </div>`;
+    if(!soldOut) t.querySelector(`[data-add="${it.id}"]`).addEventListener("click",()=>addToCart(it.id));
+    t.querySelector(`[data-dpct="${it.id}"]`).addEventListener("input",e=>{items[idx].dPct=Number((e.target.value||"").replace(/[^0-9]/g,""));write(LS_I,items)});
+    t.querySelector(`[data-dyen="${it.id}"]`).addEventListener("input",e=>{items[idx].dYen=Number((e.target.value||"").replace(/[^0-9]/g,""));write(LS_I,items)});
+    t.querySelector(`[data-edit="${it.id}"]`).addEventListener("click",()=>editItem(it.id));
+    t.querySelector(`[data-del="${it.id}"]`).addEventListener("click",()=>deleteItem(it.id));
+    els.catalog.appendChild(t);
+  });
 }
 function editItem(id){
   const i=items.findIndex(x=>x.id===id); if(i<0) return;
@@ -291,14 +298,17 @@ function editItem(id){
 function deleteItem(id){
   const it=items.find(i=>i.id===id); if(!it) return;
   if(!confirm(`『${it.name}』を削除します。よろしいですか？`)) return;
-  items=items.filter(i=>i.id!==id); cart=cart.filter(l=>l.id!==id);
+  items=items.filter(i=>i.id!==id);
+  cart=cart.filter(l=>l.id!==id);
   write(LS_I,items); renderCatalog(); renderCart(); renderItemAgg(); refreshCatOptions();
 }
 
 /* ========= カート ========= */
 function addToCart(id){
   const it=items.find(i=>i.id===id); if(!it) return;
-  const ex=cart.find(l=>l.id===id); if(ex){ex.qty+=1}else{
+  const ex=cart.find(l=>l.id===id);
+  if(ex){ ex.qty+=1; }
+  else{
     cart.push({id:it.id,name:it.name,price:it.price,sku:it.sku||"",cat:it.cat||"",qty:1,lineDiscPct:Number(it.dPct||0),lineDiscYen:Number(it.dYen||0)});
   }
   renderCart();
@@ -353,8 +363,8 @@ function printReceipt(tx){
   const html=`<html><head><meta charset="UTF-8"><style>body{font-family:system-ui;padding:16px}table{width:100%}td{padding:4px 0}</style></head>
   <body><h3>駒場祭POS レシート</h3>
   <div>${d.toLocaleString("ja-JP")} / ID:${tx.id.slice(-6)}</div>
-  <div>支払い:${esc(tx.payment)} / 担当:${esc(tx.cashier||"-")}</div>
-  ${tx.credit?.enabled?`<div>ツケ: ${esc(tx.credit.name||"-")}（${tx.credit.status==="unpaid"?"未払い":"支払い済み"}）</div>`:""}
+  <div>担当:${esc(tx.cashier||"-")}</div>
+  ${tx.credit?.enabled?`<div style="margin-top:4px"><b>ツケ相手:</b> ${esc(tx.credit.name||"-")}（${tx.credit.status==="unpaid"?"未払い":"支払い済み"}）</div>`:""}
   <hr><table>${linesHtml}</table><hr>
   <table><tr><td>小計(行割後)</td><td style="text-align:right">¥${tx.subtotal_after_line.toLocaleString("ja-JP")}</td></tr>
   <tr><td>会計割引</td><td style="text-align:right">−¥${tx.order_discount.toLocaleString("ja-JP")}</td></tr>
@@ -387,8 +397,11 @@ function commit(opts={refund:false}){
     credit:{enabled:onCredit,name:(els.creditWho?.value||"").trim(),status:onCredit?(els.creditStatus?.value||"unpaid"):"none"},
     synced:false
   };
-  if(!opts.refund){items=items.map(it=>{const l=cart.find(x=>x.id===it.id);return l?{...it,stock:Math.max(0,it.stock-l.qty)}:it})}
-  else{items=items.map(it=>{const l=cart.find(x=>x.id===it.id);return l?{...it,stock:it.stock+l.qty}:it})}
+  if(!opts.refund){
+    items=items.map(it=>{const l=cart.find(x=>x.id===it.id);return l?{...it,stock:Math.max(0,it.stock-l.qty)}:it});
+  } else {
+    items=items.map(it=>{const l=cart.find(x=>x.id===it.id);return l?{...it,stock:it.stock+l.qty}:it});
+  }
   write(LS_I,items);
   txs=[tx,...txs]; write(LS_T,txs);
   clearCart(); els.discountPct.value=""; els.discountYen.value="";
@@ -407,14 +420,28 @@ function renderSummary(){
   const byPay=new Map(); let gross=0,count=0;
   for(const tx of txs){if(!isSameDayTs(tx.ts,target)||tx.void) continue; gross+=tx.total; count++; byPay.set(tx.payment,(byPay.get(tx.payment)||0)+tx.total)}
   els.summary.innerHTML="";
-  for(const [k,v] of byPay.entries()){const div=document.createElement("div");div.className="row";div.style.justifyContent="space-between";div.innerHTML=`<span>${k}</span><span>${jpy(v)}</span>`;els.summary.appendChild(div)}
+  for(const [k,v] of byPay.entries()){
+    const div=document.createElement("div");div.className="row";div.style.justifyContent="space-between";div.innerHTML=`<span>${k}</span><span>${jpy(v)}</span>`;els.summary.appendChild(div)
+  }
+  // ツケ売上（別枠）
+  const creditSales = txs.filter(tx=>isSameDayTs(tx.ts,target)&&tx.credit?.enabled&&!tx.void).reduce((s,tx)=>s+tx.total,0);
+  if(creditSales>0){
+    const c=document.createElement("div");
+    c.className="row";
+    c.style.justifyContent="space-between";
+    c.innerHTML=`<span>ツケ売上</span><span>${jpy(creditSales)}</span>`;
+    els.summary.appendChild(c);
+  }
   const goal=Math.max(0,Number((els.goal?.value||"").replace(/[^0-9]/g,""))||0);
   const totalDiv=document.createElement("div");totalDiv.style.display="flex";totalDiv.style.justifyContent="space-between";totalDiv.style.fontWeight="700";
   totalDiv.innerHTML=`<span>合計</span><span>${jpy(gross)}</span>`;els.summary.appendChild(totalDiv);
-  if(goal>0){const ratio=Math.min(1,gross/goal);const bar=document.createElement("div");bar.style.marginTop="8px";
+  if(goal>0){
+    const ratio=Math.min(1,gross/goal);
+    const bar=document.createElement("div");bar.style.marginTop="8px";
     bar.innerHTML=`<div class="muted" style="display:flex;justify-content:space-between"><span>売上目標:${jpy(goal)}</span><span>${Math.floor(ratio*100)}%</span></div>
       <div style="height:10px;border:1px solid #ccc;border-radius:999px;overflow:hidden"><div style="height:100%;width:${ratio*100}%;background:#111"></div></div>`;
-    els.summary.appendChild(bar)}
+    els.summary.appendChild(bar)
+  }
 }
 function buildItemAggSelectedDate(){
   const target=selectedDate(); const map=new Map();
