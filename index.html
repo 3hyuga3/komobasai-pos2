@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<title>駒場祭POS（完全版フル機能＋在庫チェックボックス）</title>
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>駒場祭POS（完全版＋右上プレビュー）</title>
 <style>
   :root{--bg:#fafafa;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111;--accent:#111}
   [data-theme="dark"]{--bg:#0b0f14;--card:#0f141a;--border:#1f2937;--muted:#a3a3a3;--ink:#f8fafc;--accent:#36a3ff}
@@ -17,7 +17,7 @@
   input,select,button,textarea{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--card);color:var(--ink)}
   textarea{width:100%;min-height:64px}
   input::placeholder,textarea::placeholder{color:var(--muted)}
-  button{cursor:pointer}
+  button{cursor:pointer;font-size:16px} /* iOS拡大対策: 16px以上 */
   button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
   button.ghost{background:transparent}
   button.danger{background:transparent;border-color:#ef4444;color:#ef4444}
@@ -41,6 +41,18 @@
   .warn{color:#f59e0b}
   .dangerText{color:#ef4444}
   canvas{max-width:100%;background:transparent}
+
+  /* 右上プレビュー（スマホ縦で見やすい固定） */
+  #numpadPreview{
+    position:fixed; top:52px; right:8px; z-index:999; display:none;
+    background:rgba(0,0,0,0.75); color:#fff; font-size:28px; font-weight:800;
+    padding:4px 12px; border-radius:12px; min-width:64px; text-align:right;
+    box-shadow:0 2px 6px rgba(0,0,0,0.3);
+  }
+  #numpadPreview.flash{ transform:scale(1.15); transition:transform .12s ease; }
+
+  html, body { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+  * { -webkit-tap-highlight-color: transparent; }
 </style>
 </head>
 <body>
@@ -64,15 +76,7 @@
     <button id="viewToday">今日</button>
   </div>
 </header>
-<div id="numpadPreview"
-     style="position:fixed;top:52px;right:8px;
-            background:rgba(0,0,0,0.75);color:#fff;
-            font-size:28px;font-weight:700;
-            padding:4px 12px;border-radius:12px;
-            box-shadow:0 2px 6px rgba(0,0,0,0.3);
-            z-index:999;display:none;min-width:60px;
-            text-align:right;">
-</div>
+
 <main>
   <!-- 商品 -->
   <section class="card">
@@ -112,13 +116,13 @@
       <span class="muted">受取</span><input id="cashReceived" inputmode="numeric" placeholder="0" style="max-width:120px">
       <span class="muted">釣銭</span><span id="changeDue" class="kbd">¥0</span>
     </div>
-    <!-- 掛売（別枠） -->
+    <!-- 掛売 -->
     <div class="row" style="margin-top:8px">
       <label class="row"><input type="checkbox" id="creditFlag"> ツケ（掛売）</label>
       <input id="creditWho" placeholder="ツケ相手の氏名 / 学籍" style="max-width:240px">
       <select id="creditStatus"><option value="unpaid">未払い</option><option value="paid">支払い済み</option></select>
     </div>
-    <div class="muted" style="margin-top:4px">※ツケは「掛売」で記録。担当者とは別フィールドで保存。</div>
+    <div class="muted" style="margin-top:4px">※ツケは担当者と別フィールドで保存。</div>
 
     <!-- オンスクリーンテンキー -->
     <div style="margin-top:8px">
@@ -139,7 +143,7 @@
     </div>
   </section>
 
-  <!-- 商品別会計（期間） -->
+  <!-- 商品別（期間） -->
   <section class="card">
     <div class="row" style="justify-content:space-between">
       <div style="font-weight:600">商品別（期間）</div>
@@ -153,7 +157,7 @@
     </div>
   </section>
 
-  <!-- 在庫系（複数選択 入庫/廃棄・予測） -->
+  <!-- 在庫（複数選択 入庫/廃棄） -->
   <section class="card">
     <div class="row" style="justify-content:space-between">
       <div style="font-weight:600">在庫管理（複数選択）</div>
@@ -166,18 +170,12 @@
         <button id="btnStockClear" class="ghost">選択クリア</button>
       </div>
     </div>
-
-    <div class="muted" style="margin:6px 0">
-      □にチェック → 数量欄に個別数量 or 「一括数量」をセットして操作。直近3時間の販売ペースから売切れ予想も表示。
-    </div>
-
+    <div class="muted" style="margin:6px 0">□にチェック → 数量欄に個別数量 or 「一括数量」。</div>
     <div style="overflow:auto">
       <table>
         <thead>
           <tr>
-            <th style="width:52px;text-align:center">
-              <label class="row" style="gap:6px;justify-content:center"><input type="checkbox" id="stockAll">全</label>
-            </th>
+            <th style="width:52px;text-align:center"><label class="row" style="gap:6px;justify-content:center"><input type="checkbox" id="stockAll">全</label></th>
             <th>商品</th>
             <th>SKU/カテゴリ</th>
             <th style="width:90px">在庫</th>
@@ -187,14 +185,10 @@
         <tbody id="stockList"></tbody>
       </table>
     </div>
-
-    <div class="muted" style="margin-top:6px">
-      予測: 直近3時間の販売ペースから売切れ予想時刻。近いものは <span class="warn">警告色</span>。
-    </div>
-    <div id="stockWarnings"></div>
+    <div id="stockWarnings" class="muted" style="margin-top:6px"></div>
   </section>
 
-  <!-- 割引エンジン（時限/セット/ボリューム） -->
+  <!-- プロモ -->
   <section class="card">
     <div style="font-weight:600">プロモ設定（簡易）</div>
     <div class="row">
@@ -204,7 +198,7 @@
     </div>
   </section>
 
-  <!-- ダッシュボード（チャート・TOP） -->
+  <!-- ダッシュボード -->
   <section class="card">
     <div class="row" style="justify-content:space-between">
       <div style="font-weight:600">ダッシュボード</div>
@@ -228,7 +222,7 @@
     <div id="history"></div>
   </section>
 
-  <!-- 掛売（ツケ）管理 -->
+  <!-- 掛売管理 -->
   <section class="card">
     <div class="row" style="justify-content:space-between">
       <div style="font-weight:600">掛売（ツケ）管理（期間内）</div>
@@ -246,7 +240,7 @@
     </div>
   </section>
 
-  <!-- リマインダー・バックアップ・CSV/GAS同期 -->
+  <!-- ユーティリティ -->
   <section class="card">
     <div class="row" style="justify-content:space-between">
       <div style="font-weight:600">リマインダー / バックアップ / CSV / 同期</div>
@@ -268,6 +262,9 @@
   </section>
 </main>
 
+<!-- 右上プレビューボックス -->
+<div id="numpadPreview"></div>
+
 <!-- フッター会計バー -->
 <div class="footbar">
   <div class="row">
@@ -287,7 +284,7 @@
 </div>
 
 <script>
-/* ========= 定数/ユーティリティ ========= */
+/* ========= 基本ユーティリティ ========= */
 const LS_I="x_items_v1";
 const LS_T="x_txs_v1";
 const LS_MISC="x_misc_v1";
@@ -304,7 +301,7 @@ function beep(){if(!gid('soundFx').checked) return; try{const a=new (window.Audi
 function warnBeep(){if(!gid('soundFx').checked) return; try{const a=new (window.AudioContext||window.webkitAudioContext)();const o=a.createOscillator();const g=a.createGain();o.connect(g);g.connect(a.destination);o.type='sawtooth';o.frequency.value=220;g.gain.value=0.06;o.start();setTimeout(()=>{o.stop();a.close()},200)}catch{}; if(navigator.vibrate) navigator.vibrate([60,40,60])}
 function logSync(t){gid("syncLog").textContent="【同期ログ】\n"+t}
 
-/* ========= 要素 ========= */
+/* ========= 要素参照 ========= */
 const els={
   goal:gid("goal"),low:gid("lowStock"),cashier:gid("cashier"),
   search:gid("search"),catFilter:gid("catFilter"),
@@ -330,15 +327,10 @@ const els={
   numpad:gid("numpad"),backupSave:gid("backupSave"),backupLoad:gid("backupLoad"),
   syncGoogle:gid("syncGoogle"),
   creditTable:gid("creditTable"),creditTotal:gid("creditTotal"),exportCredit:gid("exportCredit"),markAllPaid:gid("markAllPaid"),
-  // 在庫（複数選択UI）
-  stockList: gid("stockList"),
-  stockAll: gid("stockAll"),
-  stockFilter: gid("stockFilter"),
-  stockQtyBulk: gid("stockQtyBulk"),
-  stockApplyBulk: gid("stockApplyBulk"),
-  btnRestockMany: gid("btnRestockMany"),
-  btnWasteMany: gid("btnWasteMany"),
-  btnStockClear: gid("btnStockClear"),
+  // 在庫テーブルUI
+  stockList: gid("stockList"), stockAll: gid("stockAll"), stockFilter: gid("stockFilter"),
+  stockQtyBulk: gid("stockQtyBulk"), stockApplyBulk: gid("stockApplyBulk"),
+  btnRestockMany: gid("btnRestockMany"), btnWasteMany: gid("btnWasteMany"), btnStockClear: gid("btnStockClear")
 };
 
 /* ========= 状態 ========= */
@@ -356,7 +348,7 @@ let misc=read(LS_MISC,{
   reminders:[], viewFrom:ymd(new Date()), viewTo:ymd(new Date())
 });
 
-/* ========= テーマ/フルスクリーン ========= */
+/* ========= テーマ/FS ========= */
 function applyTheme(){document.documentElement.setAttribute('data-theme', misc.theme==='dark'?'dark':'light'); els.btnTheme.textContent=(misc.theme==='dark'?'ライト':'ダーク')}
 els.btnTheme.addEventListener('click',()=>{misc.theme=misc.theme==='dark'?'light':'dark'; write(LS_MISC,misc); applyTheme()})
 els.btnFS.addEventListener('click',()=>{if(!document.fullscreenElement){document.documentElement.requestFullscreen?.()}else{document.exitFullscreen?.()}})
@@ -404,7 +396,7 @@ function renderCatalog(){
     });
     els.catalog.appendChild(t);
   });
-  renderStockList(); // 在庫テーブルも同期
+  renderStockList();
 }
 function editItem(id){
   const i=items.findIndex(x=>x.id===id); if(i<0) return;
@@ -480,12 +472,12 @@ function renderCart(){
   els.cartLines.querySelectorAll("[data-inc]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.inc;cart[i].qty++;renderCart();beep()}));
   els.cartLines.querySelectorAll("[data-dec]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.dec;cart[i].qty--;if(cart[i].qty<=0)cart.splice(i,1);renderCart()}));
   els.cartLines.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.del;cart.splice(i,1);renderCart()}));
-  els.cartLines.querySelectorAll("[data-pct]").forEach(inp=>inp.addEventListener("input",()=>{const i=+inp.dataset.pct;cart[i].lineDiscPct=parseNum(inp.value);renderCart()}));
-  els.cartLines.querySelectorAll("[data-yen]").forEach(inp=>inp.addEventListener("input",()=>{const i=+inp.dataset.yen;cart[i].lineDiscYen=parseNum(inp.value);renderCart()}));
+  els.cartLines.querySelectorAll("[data-pct]").forEach(inp=>inp.addEventListener("input",()=>{const i=+inp.dataset.pct;cart[i].lineDiscPct=parseNum(inp.value);renderCart();updatePreview(inp.value)}));
+  els.cartLines.querySelectorAll("[data-yen]").forEach(inp=>inp.addEventListener("input",()=>{const i=+inp.dataset.yen;cart[i].lineDiscYen=parseNum(inp.value);renderCart();updatePreview(inp.value)}));
   const t=totals(); els.cartTotal.textContent=jpy(t.total);
   const rec=parseNum(els.cashReceived.value); els.changeDue.textContent=jpy(Math.max(0,rec - t.total));
 }
-els.cashReceived.addEventListener("input",renderCart);
+els.cashReceived.addEventListener("input",()=>{renderCart();updatePreview(els.cashReceived.value)});
 
 /* ========= 会計確定/返金 ========= */
 function commit(opts={refund:false}){
@@ -519,31 +511,25 @@ function commit(opts={refund:false}){
   cart=[]; els.discountPct.value=""; els.discountYen.value=""; els.cashReceived.value=""; els.orderMemo.value="";
   gid('creditFlag').checked=false; gid('creditWho').value=""; gid('creditStatus').value="unpaid";
   renderCatalog(); renderCart(); renderSummary(); renderItemAgg(); renderHistory(); calcStockWarnings(); drawDashboard(); renderCredit(); renderStockList();
-  beep();
+  updatePreview(""); beep();
 }
 els.commit.addEventListener("click",()=>commit());
 els.refund.addEventListener("click",()=>commit({refund:true}));
-els.clearBtn.addEventListener("click",()=>{cart=[];renderCart()});
+els.clearBtn.addEventListener("click",()=>{cart=[];renderCart();updatePreview("")});
 
 /* ========= 期間サマリ/KPI ========= */
 function getRange(){const from=new Date(els.viewDateFrom.value+"T00:00:00"); const to=new Date(els.viewDateTo.value+"T00:00:00"); return {from,to}}
 function txInRange(){const r=getRange(); return txs.filter(tx=>!tx.void && between(tx.ts,r.from,r.to))}
 function renderSummary(){
   const r=getRange(); els.rangeS.textContent=`${r.from.toLocaleDateString("ja-JP")} 〜 ${r.to.toLocaleDateString("ja-JP")}`;
-  const list=txInRange();
-  const byPay=new Map(); let gross=0,count=0,itemsCnt=0;
+  const list=txInRange(); const byPay=new Map(); let gross=0,count=0,itemsCnt=0;
   list.forEach(tx=>{gross+=tx.total; count++; byPay.set(tx.payment,(byPay.get(tx.payment)||0)+tx.total); itemsCnt+=tx.lines.reduce((s,l)=>s+l.qty,0)});
-  els.summary.innerHTML="";
-  for(const [k,v] of byPay.entries()){
-    const div=document.createElement("div");div.className="row";div.style.justifyContent="space-between";div.innerHTML=`<span>${k}</span><span>${jpy(v)}</span>`;els.summary.appendChild(div)
-  }
+  els.summary.innerHTML=""; for(const [k,v] of byPay.entries()){const d=document.createElement("div");d.className="row";d.style.justifyContent="space-between";d.innerHTML=`<span>${k}</span><span>${jpy(v)}</span>`;els.summary.appendChild(d)}
   const totalDiv=document.createElement("div"); totalDiv.style.display="flex"; totalDiv.style.justifyContent="space-between"; totalDiv.style.fontWeight="700";
   totalDiv.innerHTML=`<span>合計</span><span>${jpy(gross)}</span>`; els.summary.appendChild(totalDiv);
   els.avgTicket.textContent = jpy(count? Math.round(gross/count):0);
   els.avgItems.textContent = count? (itemsCnt/count).toFixed(2) : "0.00";
-  const goal = parseNum(els.goal.value); const ratio = goal>0? Math.min(1,gross/goal):0;
-  gid("progressPct").textContent = Math.floor(ratio*100)+"%";
-  gid("progressBar").style.width = (ratio*100)+"%";
+  const goal = parseNum(els.goal.value); const ratio = goal>0? Math.min(1,gross/goal):0; gid("progressPct").textContent = Math.floor(ratio*100)+"%"; gid("progressBar").style.width = (ratio*100)+"%";
 }
 
 /* ========= 商品別（期間） ========= */
@@ -573,7 +559,7 @@ function renderItemAgg(){
     els.itemAggTable.appendChild(tr)});
 }
 
-/* ========= 在庫 予測＆複数選択UI ========= */
+/* ========= 在庫テーブル＆予測 ========= */
 function calcStockWarnings(){
   const now=Date.now(), three=now-3*3600*1000;
   const pace={}; txs.forEach(tx=>{
@@ -595,28 +581,20 @@ function calcStockWarnings(){
     return `<div class="${soon?'warn':''}">・${esc(r.name)} 残${r.stock} / ${r.perHour.toFixed(1)}個/時 → 売切予想 ${r.est.toLocaleTimeString("ja-JP")}${soon?'（要補充）':''}</div>`;
   }).join("") || "<div class='muted'>十分な在庫があります</div>";
 }
-
-// 在庫テーブル描画
 function renderStockList(){
   const q = (els.stockFilter.value||"").toLowerCase();
   const rows = items
     .filter(it => !q || (it.name+" "+(it.sku||"")).toLowerCase().includes(q))
     .map(it => {
       return `<tr>
-        <td style="text-align:center">
-          <input type="checkbox" class="stockChk" data-id="${it.id}">
-        </td>
+        <td style="text-align:center"><input type="checkbox" class="stockChk" data-id="${it.id}"></td>
         <td>${esc(it.name)}</td>
         <td class="muted">${esc(it.sku||"-")} / ${esc(it.cat||"-")}</td>
         <td>${it.stock}</td>
-        <td>
-          <input class="stockQtyInput" data-id="${it.id}" inputmode="numeric" placeholder="数量">
-        </td>
+        <td><input class="stockQtyInput" data-id="${it.id}" inputmode="numeric" placeholder="数量"></td>
       </tr>`;
     }).join("") || `<tr><td colspan="5" class="muted">該当なし</td></tr>`;
   els.stockList.innerHTML = rows;
-
-  // 全選択チェックの連動
   els.stockList.querySelectorAll('.stockChk').forEach(chk=>{
     chk.addEventListener('change',()=> {
       const all = els.stockList.querySelectorAll('.stockChk');
@@ -625,74 +603,50 @@ function renderStockList(){
     });
   });
 }
-
-// 選択中の {id, qty} を収集
 function getSelectedStockOps(){
   const ids = [...els.stockList.querySelectorAll('.stockChk:checked')].map(x=>x.dataset.id);
   const mapQty = {};
   els.stockList.querySelectorAll('.stockQtyInput').forEach(inp=>{
-    const v = parseNum(inp.value);
-    if (v>0) mapQty[inp.dataset.id] = v;
+    const v = parseNum(inp.value); if (v>0) mapQty[inp.dataset.id] = v;
+    inp.addEventListener('input',()=>updatePreview(inp.value)); // 入力→右上に反映
   });
   return ids.map(id => ({ id, qty: mapQty[id] ?? 1 }));
 }
-
-// 一括数量ボタン
 els.stockApplyBulk.addEventListener('click', ()=>{
-  const v = parseNum(els.stockQtyBulk.value);
-  if (v<=0) return alert("一括数量を入力してください");
+  const v = parseNum(els.stockQtyBulk.value); if (v<=0) return alert("一括数量を入力してください");
   els.stockList.querySelectorAll('.stockChk:checked').forEach(chk=>{
     const id = chk.dataset.id;
     const inp = els.stockList.querySelector(`.stockQtyInput[data-id="${id}"]`);
-    if (inp) inp.value = v;
+    if (inp) { inp.value = v; updatePreview(v); }
   });
 });
-
-// 全選択/解除
 els.stockAll.addEventListener('change', ()=>{
   const on = els.stockAll.checked;
   els.stockList.querySelectorAll('.stockChk').forEach(chk=>chk.checked = on);
 });
-
-// 絞り込み
 els.stockFilter.addEventListener('input', renderStockList);
-
-// 選択クリア
 els.btnStockClear.addEventListener('click', ()=>{
   els.stockAll.checked = false;
   els.stockList.querySelectorAll('.stockChk').forEach(chk=>chk.checked=false);
   els.stockList.querySelectorAll('.stockQtyInput').forEach(inp=>inp.value="");
+  updatePreview("");
 });
-
-// 入庫（複数）
 els.btnRestockMany.addEventListener('click', ()=>{
-  const ops = getSelectedStockOps();
-  if (!ops.length) return alert("商品にチェックを入れてください");
-  let changed = 0;
-  ops.forEach(({id, qty})=>{
-    const it = items.find(x=>x.id===id);
-    if (it && qty>0){ it.stock += qty; changed++; }
-  });
+  const ops = getSelectedStockOps(); if (!ops.length) return alert("商品にチェックを入れてください");
+  let changed = 0; ops.forEach(({id, qty})=>{const it = items.find(x=>x.id===id); if (it && qty>0){ it.stock += qty; changed++; }});
   if (!changed) return alert("数量が不正です");
   write(LS_I, items);
   renderCatalog(); renderItemAgg(); calcStockWarnings(); renderStockList();
-  beep();
+  updatePreview(""); beep();
 });
-
-// 廃棄（複数）
 els.btnWasteMany.addEventListener('click', ()=>{
-  const ops = getSelectedStockOps();
-  if (!ops.length) return alert("商品にチェックを入れてください");
+  const ops = getSelectedStockOps(); if (!ops.length) return alert("商品にチェックを入れてください");
   if (!confirm("選択した商品の在庫を減算（廃棄）します。よろしいですか？")) return;
-  let changed = 0;
-  ops.forEach(({id, qty})=>{
-    const it = items.find(x=>x.id===id);
-    if (it && qty>0){ it.stock = Math.max(0, it.stock - qty); changed++; }
-  });
+  let changed = 0; ops.forEach(({id, qty})=>{const it = items.find(x=>x.id===id); if (it && qty>0){ it.stock = Math.max(0, it.stock - qty); changed++; }});
   if (!changed) return alert("数量が不正です");
   write(LS_I, items);
   renderCatalog(); renderItemAgg(); calcStockWarnings(); renderStockList();
-  warnBeep();
+  updatePreview(""); warnBeep();
 });
 
 /* ========= ダッシュボード ========= */
@@ -711,8 +665,7 @@ function drawDashboard(){
   const hours={}; for(let i=0;i<24;i++){hours[i]=0}
   list.forEach(tx=>{const d=new Date(tx.ts); hours[d.getHours()]+=tx.total});
   drawSalesChart(els.chartSales,hours);
-  const qtyMap=new Map();
-  list.forEach(tx=>tx.lines.forEach(l=>qtyMap.set(l.name,(qtyMap.get(l.name)||0)+l.qty)));
+  const qtyMap=new Map(); list.forEach(tx=>tx.lines.forEach(l=>qtyMap.set(l.name,(qtyMap.get(l.name)||0)+l.qty)));
   const top=[...qtyMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
   els.topItems.innerHTML= top.map(([name,qty])=>`<li>${esc(name)} <span class="muted">×${qty}</span></li>`).join("") || "<li class='muted'>データなし</li>";
 }
@@ -741,12 +694,8 @@ function renderHistory(){
       </div>
     </div>`;
   }).join("") || "<div class='muted'>該当なし</div>";
-
-  els.history.querySelectorAll("[data-print]").forEach(b=>b.addEventListener("click",()=>{
-    const tx=txs.find(t=>t.id===b.dataset.print); if(tx) printReceipt(tx);
-  }));
-  els.history.querySelectorAll("[data-void]").forEach(b=>b.addEventListener("click",()=>{
-    const id=b.dataset.void; if(!confirm("この取引を取消（void）しますか？")) return;
+  els.history.querySelectorAll("[data-print]").forEach(b=>b.addEventListener("click",()=>{const tx=txs.find(t=>t.id===b.dataset.print); if(tx) printReceipt(tx);}));
+  els.history.querySelectorAll("[data-void]").forEach(b=>b.addEventListener("click",()=>{const id=b.dataset.void; if(!confirm("この取引を取消（void）しますか？")) return;
     txs=txs.map(t=>t.id===id?{...t,void:true}:t); write(LS_T,txs); renderHistory(); renderSummary(); drawDashboard(); renderCredit();
   }));
 }
@@ -775,7 +724,7 @@ function printReceipt(tx){
   const w=window.open("", "_blank", "width=420,height=640"); w.document.open(); w.document.write(html); w.document.close();
 }
 
-/* ========= 掛売（ツケ）管理 ========= */
+/* ========= 掛売管理 ========= */
 function buildCreditMap(){
   const list=txInRange().filter(tx=>tx.credit?.enabled && tx.credit.status==='unpaid' && !tx.void);
   const map=new Map();
@@ -851,7 +800,7 @@ els.backupLoad.addEventListener('change',e=>{
   }; rd.readAsText(f);
 });
 
-/* ========= CSV入出力 ========= */
+/* ========= CSV ========= */
 els.exportItems.addEventListener("click",()=>{
   const rows=[["name","price","stock","sku","cat","dPct","dYen"]];
   items.forEach(it=>rows.push([it.name,it.price,it.stock||0,it.sku||"",it.cat||"",it.dPct||0,it.dYen||0]));
@@ -913,26 +862,37 @@ els.syncGoogle.addEventListener("click", async ()=>{
   }catch(e){ alert("同期エラー: "+e.message); logSync("例外: "+e.message); }
 });
 
-/* ========= オンスクリーンテンキー ========= */
+/* ========= オンスクリーンテンキー＋右上プレビュー ========= */
+function updatePreview(value){
+  const box = gid("numpadPreview");
+  if (!value){ box.style.display="none"; return; }
+  box.textContent = value;
+  box.style.display = "block";
+  box.classList.add("flash");
+  setTimeout(()=>box.classList.remove("flash"),100);
+}
 (function buildNumpad(){
   const nums=['7','8','9','4','5','6','1','2','3','0','C','⏎'];
   els.numpad.innerHTML = nums.map(n=>`<button data-k="${n}">${n}</button>`).join('');
-  let targetInput = els.cashReceived;
-  [els.cashReceived, els.discountPct, els.discountYen].forEach(inp=>inp.addEventListener('focus',()=>targetInput=inp));
+  let targetInput = els.cashReceived; // 初期は受取欄
+  // 数値入力系でフォーカス時にターゲット更新＋プレビュー更新
+  [els.cashReceived, els.discountPct, els.discountYen, els.stockQtyBulk].forEach(inp=>{
+    inp.addEventListener('focus',()=>{targetInput=inp; updatePreview(inp.value)});
+    inp.addEventListener('input',()=>updatePreview(inp.value));
+    inp.addEventListener('blur',()=>updatePreview(""));
+  });
   els.numpad.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
     const k=b.dataset.k;
     if(k==='C'){ targetInput.value=''; }
-    else if(k==='⏎'){ renderCart(); }
+    else if(k==='⏎'){ /*確定*/ }
     else { targetInput.value = (targetInput.value||'') + k; }
-    targetInput.dispatchEvent(new Event('input'));
+    targetInput.dispatchEvent(new Event('input')); // プレビューも更新
+    beep(); if (navigator.vibrate) navigator.vibrate(20);
   }));
 })();
 
 /* ========= 日付レンジ ========= */
-function initRange(){
-  els.viewDateFrom.value = misc.viewFrom || ymd(new Date());
-  els.viewDateTo.value = misc.viewTo || ymd(new Date());
-}
+function initRange(){ els.viewDateFrom.value = misc.viewFrom || ymd(new Date()); els.viewDateTo.value = misc.viewTo || ymd(new Date()); }
 [els.viewDateFrom,els.viewDateTo].forEach(el=>el.addEventListener('change',()=>{misc.viewFrom=els.viewDateFrom.value; misc.viewTo=els.viewDateTo.value; write(LS_MISC,misc); refreshAll(); renderCredit()}));
 els.viewToday.addEventListener('click',()=>{const t=ymd(new Date()); els.viewDateFrom.value=t; els.viewDateTo.value=t; misc.viewFrom=t; misc.viewTo=t; write(LS_MISC,misc); refreshAll(); renderCredit()});
 
@@ -949,8 +909,7 @@ function init(){
   els.catFilter.addEventListener("change",renderCatalog);
   gid("newItemBtn").addEventListener("click",()=>{ els.newForm.style.display = els.newForm.style.display==='none'?'flex':'none'; });
   gid("addItem").addEventListener("click",()=>{
-    const name=els.newName.value.trim();
-    const price=parseNum(els.newPrice.value); const stock=parseNum(els.newStock.value);
+    const name=els.newName.value.trim(); const price=parseNum(els.newPrice.value); const stock=parseNum(els.newStock.value);
     const sku=els.newSku.value.trim(); const cat=els.newCat.value.trim();
     if(!name){alert("商品名は必須です");return}
     items=[{id:crypto.randomUUID(),name,price,stock,sku,cat,dPct:0,dYen:0},...items];
@@ -974,6 +933,19 @@ function init(){
   write(LS_I,items); write(LS_T,txs); write(LS_MISC,misc);
 }
 init();
+
+/* ========= iOS ダブルタップ拡大の抑止 ========= */
+(function preventIOSDoubleTapZoom(){
+  let last = 0;
+  const selector = 'button, [data-add], [data-del], [data-inc], [data-dec], [data-k]';
+  document.addEventListener('touchend', function(e){
+    const t = e.target;
+    if (!t.closest(selector)) return;
+    const now = Date.now();
+    if (now - last < 400) { e.preventDefault(); }
+    last = now;
+  }, {passive:false, capture:true});
+})();
 </script>
 </body>
 </html>
