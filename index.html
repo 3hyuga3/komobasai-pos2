@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>駒場祭POS（完全版フル機能）</title>
+<title>駒場祭POS（完全版フル機能＋在庫チェックボックス）</title>
 <style>
   :root{--bg:#fafafa;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111;--accent:#111}
   [data-theme="dark"]{--bg:#0b0f14;--card:#0f141a;--border:#1f2937;--muted:#a3a3a3;--ink:#f8fafc;--accent:#36a3ff}
@@ -144,17 +144,44 @@
     </div>
   </section>
 
-  <!-- 在庫系（入庫/廃棄・予測） -->
+  <!-- 在庫系（複数選択 入庫/廃棄・予測） -->
   <section class="card">
     <div class="row" style="justify-content:space-between">
-      <div style="font-weight:600">在庫管理</div>
+      <div style="font-weight:600">在庫管理（複数選択）</div>
       <div class="row">
-        <input id="stockNote" placeholder="理由（入庫/廃棄）">
-        <button id="btnRestock">選択商品 入庫</button>
-        <button id="btnWaste" class="danger">選択商品 廃棄</button>
+        <input id="stockFilter" placeholder="商品名/sku で絞り込み" style="min-width:200px">
+        <input id="stockQtyBulk" inputmode="numeric" placeholder="一括数量" style="max-width:120px">
+        <button id="stockApplyBulk">一括セット</button>
+        <button id="btnRestockMany">選択 入庫</button>
+        <button id="btnWasteMany" class="danger">選択 廃棄</button>
+        <button id="btnStockClear" class="ghost">選択クリア</button>
       </div>
     </div>
-    <div class="muted">予測: 直近3時間の販売ペースから売切れ予想時刻を計算。近いものは <span class="warn">警告色</span>。</div>
+
+    <div class="muted" style="margin:6px 0">
+      □にチェック → 数量欄に個別数量 or 「一括数量」をセットして操作。直近3時間の販売ペースから売切れ予想も表示。
+    </div>
+
+    <div style="overflow:auto">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:52px;text-align:center">
+              <label class="row" style="gap:6px;justify-content:center"><input type="checkbox" id="stockAll">全</label>
+            </th>
+            <th>商品</th>
+            <th>SKU/カテゴリ</th>
+            <th style="width:90px">在庫</th>
+            <th style="width:120px">数量</th>
+          </tr>
+        </thead>
+        <tbody id="stockList"></tbody>
+      </table>
+    </div>
+
+    <div class="muted" style="margin-top:6px">
+      予測: 直近3時間の販売ペースから売切れ予想時刻。近いものは <span class="warn">警告色</span>。
+    </div>
     <div id="stockWarnings"></div>
   </section>
 
@@ -283,7 +310,6 @@ const els={
   orderMemo:gid("orderMemo"),cashReceived:gid("cashReceived"),changeDue:gid("changeDue"),
   saleStart:gid("saleStart"),saleEnd:gid("saleEnd"),salePct:gid("salePct"),
   comboPrice:gid("comboPrice"),volN:gid("volN"),volPct:gid("volPct"),
-  stockNote:gid("stockNote"),btnRestock:gid("btnRestock"),btnWaste:gid("btnWaste"),
   stockWarnings:gid("stockWarnings"),
   chartSales:gid("chartSales"),topItems:gid("topItems"),refreshDash:gid("refreshDash"),
   histSearch:gid("histSearch"),histRefresh:gid("histRefresh"),history:gid("history"),
@@ -294,7 +320,16 @@ const els={
   printAfterSale:gid("printAfterSale"),soundFx:gid("soundFx"),
   numpad:gid("numpad"),backupSave:gid("backupSave"),backupLoad:gid("backupLoad"),
   syncGoogle:gid("syncGoogle"),
-  creditTable:gid("creditTable"),creditTotal:gid("creditTotal"),exportCredit:gid("exportCredit"),markAllPaid:gid("markAllPaid")
+  creditTable:gid("creditTable"),creditTotal:gid("creditTotal"),exportCredit:gid("exportCredit"),markAllPaid:gid("markAllPaid"),
+  // 在庫（複数選択UI）
+  stockList: gid("stockList"),
+  stockAll: gid("stockAll"),
+  stockFilter: gid("stockFilter"),
+  stockQtyBulk: gid("stockQtyBulk"),
+  stockApplyBulk: gid("stockApplyBulk"),
+  btnRestockMany: gid("btnRestockMany"),
+  btnWasteMany: gid("btnWasteMany"),
+  btnStockClear: gid("btnStockClear"),
 };
 
 /* ========= 状態 ========= */
@@ -356,10 +391,11 @@ function renderCatalog(){
     t.querySelector(`[data-del="${it.id}"]`).addEventListener("click",()=>{
       if(!confirm(`『${it.name}』を削除します。よろしいですか？`)) return;
       items=items.filter(x=>x.id!==it.id); cart=cart.filter(x=>x.id!==it.id);
-      write(LS_I,items); renderCatalog(); renderCart(); renderItemAgg(); refreshCatOptions();
+      write(LS_I,items); renderCatalog(); renderCart(); renderItemAgg(); refreshCatOptions(); renderStockList();
     });
     els.catalog.appendChild(t);
   });
+  renderStockList(); // 在庫テーブルも同期
 }
 function editItem(id){
   const i=items.findIndex(x=>x.id===id); if(i<0) return;
@@ -369,7 +405,8 @@ function editItem(id){
   const stock=parseNum(prompt("在庫",it.stock)); if(isNaN(stock)) return alert("在庫が不正");
   const sku=prompt("SKU",it.sku||""); if(sku===null) return;
   const cat=prompt("カテゴリ（例: フード/ドリンク）",it.cat||""); if(cat===null) return;
-  items[i]={...it,name,price,stock,sku,cat}; write(LS_I,items); renderCatalog(); renderCart(); refreshCatOptions(); calcStockWarnings();
+  items[i]={...it,name,price,stock,sku,cat}; write(LS_I,items);
+  renderCatalog(); renderCart(); refreshCatOptions(); calcStockWarnings(); renderStockList();
 }
 
 /* ========= カート/割引 ========= */
@@ -384,7 +421,6 @@ function lineAfterDisc(l){
   const disc=Math.min(base,Math.floor(base*pct/100)+yen); return base-disc;
 }
 function applyPromotions(subAfterLine){
-  // 時限セール
   const now=new Date(); const st=misc.sale.start, ed=misc.sale.end, pct=parseNum(misc.sale.pct)||0;
   let timeDisc=0;
   if(st && ed){
@@ -393,14 +429,12 @@ function applyPromotions(subAfterLine){
     const to = new Date(now.getFullYear(),now.getMonth(),now.getDate(),eh||0,em||0);
     if(now>=from && now<=to){ timeDisc=Math.floor(subAfterLine*(Math.min(80,Math.max(0,pct))/100)); }
   }
-  // セット（簡易）
   let comboDisc=0;
   if(parseNum(els.comboPrice.value)>0 && cart.length>=2){
     const targetPrice=parseNum(els.comboPrice.value);
     const two=cart.slice(0,2).reduce((s,l)=>s+lineAfterDisc(l),0);
     if(two>targetPrice){ comboDisc += (two-targetPrice); }
   }
-  // ボリューム
   let volDisc=0;
   const n=parseNum(els.volN.value), pp=parseNum(els.volPct.value);
   const totalQty=cart.reduce((s,l)=>s+l.qty,0);
@@ -442,6 +476,7 @@ function renderCart(){
   const t=totals(); els.cartTotal.textContent=jpy(t.total);
   const rec=parseNum(els.cashReceived.value); els.changeDue.textContent=jpy(Math.max(0,rec - t.total));
 }
+els.cashReceived.addEventListener("input",renderCart);
 
 /* ========= 会計確定/返金 ========= */
 function commit(opts={refund:false}){
@@ -474,13 +509,12 @@ function commit(opts={refund:false}){
   write(LS_I,items); txs=[tx,...txs]; write(LS_T,txs);
   cart=[]; els.discountPct.value=""; els.discountYen.value=""; els.cashReceived.value=""; els.orderMemo.value="";
   gid('creditFlag').checked=false; gid('creditWho').value=""; gid('creditStatus').value="unpaid";
-  renderCatalog(); renderCart(); renderSummary(); renderItemAgg(); renderHistory(); calcStockWarnings(); drawDashboard(); renderCredit();
+  renderCatalog(); renderCart(); renderSummary(); renderItemAgg(); renderHistory(); calcStockWarnings(); drawDashboard(); renderCredit(); renderStockList();
   beep();
 }
 els.commit.addEventListener("click",()=>commit());
 els.refund.addEventListener("click",()=>commit({refund:true}));
 els.clearBtn.addEventListener("click",()=>{cart=[];renderCart()});
-els.cashReceived.addEventListener("input",renderCart);
 
 /* ========= 期間サマリ/KPI ========= */
 function getRange(){const from=new Date(els.viewDateFrom.value+"T00:00:00"); const to=new Date(els.viewDateTo.value+"T00:00:00"); return {from,to}}
@@ -530,10 +564,7 @@ function renderItemAgg(){
     els.itemAggTable.appendChild(tr)});
 }
 
-/* ========= 在庫 入庫/廃棄/予測 ========= */
-function selectedItemPrompt(){const name=prompt("対象商品の『商品名』を正確に入力"); if(!name)return null; const it=items.find(x=>x.name===name); if(!it){alert("商品が見つかりません");return null} return it}
-els.btnRestock.addEventListener("click",()=>{const it=selectedItemPrompt(); if(!it)return; const add=parseNum(prompt("入庫数量","0")); if(add<=0)return; it.stock+=add; write(LS_I,items); renderCatalog(); calcStockWarnings(); beep();})
-els.btnWaste.addEventListener("click",()=>{const it=selectedItemPrompt(); if(!it)return; const sub=parseNum(prompt("廃棄数量","0")); if(sub<=0)return; it.stock=Math.max(0,it.stock-sub); write(LS_I,items); renderCatalog(); calcStockWarnings(); warnBeep();})
+/* ========= 在庫 予測＆複数選択UI ========= */
 function calcStockWarnings(){
   const now=Date.now(), three=now-3*3600*1000;
   const pace={}; txs.forEach(tx=>{
@@ -555,6 +586,105 @@ function calcStockWarnings(){
     return `<div class="${soon?'warn':''}">・${esc(r.name)} 残${r.stock} / ${r.perHour.toFixed(1)}個/時 → 売切予想 ${r.est.toLocaleTimeString("ja-JP")}${soon?'（要補充）':''}</div>`;
   }).join("") || "<div class='muted'>十分な在庫があります</div>";
 }
+
+// 在庫テーブル描画
+function renderStockList(){
+  const q = (els.stockFilter.value||"").toLowerCase();
+  const rows = items
+    .filter(it => !q || (it.name+" "+(it.sku||"")).toLowerCase().includes(q))
+    .map(it => {
+      return `<tr>
+        <td style="text-align:center">
+          <input type="checkbox" class="stockChk" data-id="${it.id}">
+        </td>
+        <td>${esc(it.name)}</td>
+        <td class="muted">${esc(it.sku||"-")} / ${esc(it.cat||"-")}</td>
+        <td>${it.stock}</td>
+        <td>
+          <input class="stockQtyInput" data-id="${it.id}" inputmode="numeric" placeholder="数量">
+        </td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="5" class="muted">該当なし</td></tr>`;
+  els.stockList.innerHTML = rows;
+
+  // 全選択チェックの連動
+  els.stockList.querySelectorAll('.stockChk').forEach(chk=>{
+    chk.addEventListener('change',()=> {
+      const all = els.stockList.querySelectorAll('.stockChk');
+      const sel = [...all].filter(x=>x.checked);
+      els.stockAll.checked = (sel.length === all.length && all.length>0);
+    });
+  });
+}
+
+// 選択中の {id, qty} を収集
+function getSelectedStockOps(){
+  const ids = [...els.stockList.querySelectorAll('.stockChk:checked')].map(x=>x.dataset.id);
+  const mapQty = {};
+  els.stockList.querySelectorAll('.stockQtyInput').forEach(inp=>{
+    const v = parseNum(inp.value);
+    if (v>0) mapQty[inp.dataset.id] = v;
+  });
+  return ids.map(id => ({ id, qty: mapQty[id] ?? 1 }));
+}
+
+// 一括数量ボタン
+els.stockApplyBulk.addEventListener('click', ()=>{
+  const v = parseNum(els.stockQtyBulk.value);
+  if (v<=0) return alert("一括数量を入力してください");
+  els.stockList.querySelectorAll('.stockChk:checked').forEach(chk=>{
+    const id = chk.dataset.id;
+    const inp = els.stockList.querySelector(`.stockQtyInput[data-id="${id}"]`);
+    if (inp) inp.value = v;
+  });
+});
+
+// 全選択/解除
+els.stockAll.addEventListener('change', ()=>{
+  const on = els.stockAll.checked;
+  els.stockList.querySelectorAll('.stockChk').forEach(chk=>chk.checked = on);
+});
+
+// 絞り込み
+els.stockFilter.addEventListener('input', renderStockList);
+
+// 選択クリア
+els.btnStockClear.addEventListener('click', ()=>{
+  els.stockAll.checked = false;
+  els.stockList.querySelectorAll('.stockChk').forEach(chk=>chk.checked=false);
+  els.stockList.querySelectorAll('.stockQtyInput').forEach(inp=>inp.value="");
+});
+
+// 入庫（複数）
+els.btnRestockMany.addEventListener('click', ()=>{
+  const ops = getSelectedStockOps();
+  if (!ops.length) return alert("商品にチェックを入れてください");
+  let changed = 0;
+  ops.forEach(({id, qty})=>{
+    const it = items.find(x=>x.id===id);
+    if (it && qty>0){ it.stock += qty; changed++; }
+  });
+  if (!changed) return alert("数量が不正です");
+  write(LS_I, items);
+  renderCatalog(); renderItemAgg(); calcStockWarnings(); renderStockList();
+  beep();
+});
+
+// 廃棄（複数）
+els.btnWasteMany.addEventListener('click', ()=>{
+  const ops = getSelectedStockOps();
+  if (!ops.length) return alert("商品にチェックを入れてください");
+  if (!confirm("選択した商品の在庫を減算（廃棄）します。よろしいですか？")) return;
+  let changed = 0;
+  ops.forEach(({id, qty})=>{
+    const it = items.find(x=>x.id===id);
+    if (it && qty>0){ it.stock = Math.max(0, it.stock - qty); changed++; }
+  });
+  if (!changed) return alert("数量が不正です");
+  write(LS_I, items);
+  renderCatalog(); renderItemAgg(); calcStockWarnings(); renderStockList();
+  warnBeep();
+});
 
 /* ========= ダッシュボード ========= */
 function drawSalesChart(canvas,hourly){
@@ -706,7 +836,7 @@ els.backupLoad.addEventListener('change',e=>{
       if(obj.txs) txs=obj.txs;
       if(obj.misc) misc=obj.misc;
       write(LS_I,items); write(LS_T,txs); write(LS_MISC,misc);
-      applyTheme(); initRange(); refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit();
+      applyTheme(); initRange(); refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit(); renderStockList();
       alert("バックアップを読み込みました");
     }catch(e){alert("読込エラー: "+e.message)}
   }; rd.readAsText(f);
@@ -733,7 +863,7 @@ els.importItems.addEventListener("change",e=>{
       const c=r.split(",");
       return {id:crypto.randomUUID(),name:c[iName],price:Number(c[iPrice]),stock:Number(c[iStock]||0),sku:c[iSku]||"",cat:(iCat>=0?c[iCat]:""),dPct:Number(c[iDPct]||0),dYen:Number(c[iDYen]||0)};
     }).filter(x=>x.name && !isNaN(x.price));
-    write(LS_I,items); renderCatalog(); renderItemAgg(); refreshCatOptions();
+    write(LS_I,items); renderCatalog(); renderItemAgg(); refreshCatOptions(); renderStockList();
   };
   reader.readAsText(f);
 });
@@ -817,7 +947,7 @@ function init(){
     items=[{id:crypto.randomUUID(),name,price,stock,sku,cat,dPct:0,dYen:0},...items];
     write(LS_I,items);
     els.newName.value=els.newPrice.value=els.newStock.value=els.newSku.value=els.newCat.value="";
-    renderCatalog(); refreshCatOptions();
+    renderCatalog(); refreshCatOptions(); renderStockList();
   });
   els.resetDemo.addEventListener("click",()=>{
     if(!confirm("デモ商品を入れ直します。既存の商品は上書きされます。")) return;
@@ -827,11 +957,11 @@ function init(){
       {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",cat:"フード",dPct:0,dYen:0},
       {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",cat:"ドリンク",dPct:0,dYen:0}
     ];
-    write(LS_I,items); renderCatalog(); refreshCatOptions();
+    write(LS_I,items); renderCatalog(); refreshCatOptions(); renderStockList();
   });
 
   refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit();
-  initRange();
+  initRange(); renderStockList();
   write(LS_I,items); write(LS_T,txs); write(LS_MISC,misc);
 }
 init();
