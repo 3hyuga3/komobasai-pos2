@@ -873,23 +873,42 @@ els.exportItems.addEventListener("click",()=>{
 });
 els.importItems.addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f)return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    const text=String(ev.target.result).trim();
-    const lines=text.split(/\r?\n/).filter(Boolean);
-    const header=lines.shift().split(",");
-    const iName=header.indexOf("name"), iPrice=header.indexOf("price"),
-          iStock=header.indexOf("stock"), iSku=header.indexOf("sku"),
-          iCat=header.indexOf("cat"), iDPct=header.indexOf("dPct"),
-          iDYen=header.indexOf("dYen");
-    const next = lines.map(r=>{
-      const c=r.split(",");
-      return {id:crypto.randomUUID(),name:c[iName],price:Number(c[iPrice]),stock(Number(c[iStock]||0)),sku:c[iSku]||"",cat:(iCat>=0?c[iCat]:""),dPct:Number(c[iDPct]||0),dYen:Number(c[iDYen]||0)};
-    }).filter(x=>x.name && !isNaN(x.price));
-    if (!next.length) { alert("読み込む商品がありません"); return; }
-    items = next;
-    write(LS_I,items); refreshCatOptions(); renderCatalog(); renderItemAgg(); renderStockList();
-  };
+  const reader = new FileReader();
+reader.onload = (ev) => {
+  const text = String(ev.target.result || "").trim();
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if (!lines.length) { alert("CSVが空です"); return; }
+
+  const header = lines.shift().split(",");
+  const idx = (key) => header.indexOf(key);
+  const iName = idx("name"), iPrice = idx("price"),
+        iStock = idx("stock"), iSku = idx("sku"),
+        iCat  = idx("cat"),   iDPct = idx("dPct"),
+        iDYen = idx("dYen");
+
+  const next = lines.map(r => {
+    const c = r.split(",");
+    const name  = iName >= 0 ? (c[iName] || "").trim() : "";
+    const price = Number(iPrice >= 0 ? c[iPrice] : "");
+    const stock = Number(iStock >= 0 ? (c[iStock] || 0) : 0);
+    return {
+      id: (crypto.randomUUID ? crypto.randomUUID() : (Date.now()+"-"+Math.random())),
+      name,
+      price,
+      stock,                              // ← コロンあり！
+      sku:  iSku  >= 0 ? (c[iSku]  || "") : "",
+      cat:  iCat  >= 0 ? (c[iCat]  || "") : "",
+      dPct: Number(iDPct >= 0 ? (c[iDPct] || 0) : 0),
+      dYen: Number(iDYen >= 0 ? (c[iDYen] || 0) : 0),
+    };
+  }).filter(x => x.name && !isNaN(x.price));
+
+  if (!next.length) { alert("読み込む商品がありません"); return; }
+
+  items = next;
+  write(LS_I, items);
+  refreshCatOptions(); renderCatalog(); renderItemAgg(); renderStockList();
+};
   reader.readAsText(f);
 });
 els.exportTx.addEventListener("click",()=>{
