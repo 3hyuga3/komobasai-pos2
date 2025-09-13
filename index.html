@@ -1025,7 +1025,29 @@ function init(){
   applyChromeVisibility();
 }
 init();
-
+// === 商品追加ボタンのイベント委譲（確実に反応させる） ===
+// カタログの中でクリックが起きたら、[data-add] を遡って探索して addToCart を呼ぶ。
+// 一度だけ張るためのフラグ __delegated を使っています。
+if (!els.catalog.__delegated) {
+  els.catalog.addEventListener('click', (e) => {
+    const addBtn = e.target.closest('[data-add]');
+    if (addBtn) {
+      const id = addBtn.getAttribute('data-add');
+      if (id) addToCart(id);
+      return;
+    }
+    // タイル全体タップで追加したい場合は下を有効化
+    // const tile = e.target.closest('.tile');
+    // if (tile) {
+    //   const btn = tile.querySelector('[data-add]');
+    //   if (btn && !btn.disabled) {
+    //     const id = btn.getAttribute('data-add');
+    //     if (id) addToCart(id);
+    //   }
+    // }
+  }, { passive: true });
+  els.catalog.__delegated = true;
+}
 /* ========= iOS ダブルタップ拡大の抑止 ========= */
 (function preventIOSDoubleTapZoom(){
   let last = 0;
