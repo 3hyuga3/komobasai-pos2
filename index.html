@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>駒場祭POS（カテゴリ横スクロール対応 完全版）</title>
+<title>駒場祭POS（完全版：消失対策＋カテゴリ横スクロール）</title>
 <style>
   :root{--bg:#fafafa;--card:#fff;--border:#e5e7eb;--muted:#6b7280;--ink:#111;--accent:#111;--tile-min:160px}
   [data-theme="dark"]{--bg:#0b0f14;--card:#0f141a;--border:#1f2937;--muted:#a3a3a3;--ink:#f8fafc;--accent:#36a3ff}
@@ -61,15 +61,14 @@
   .chipbar{
     display:flex; gap:6px; align-items:center;
     overflow-x:auto; -webkit-overflow-scrolling:touch;
-    padding:6px 2px;
-    scrollbar-width:none;
+    padding:6px 2px; scrollbar-width:none;
   }
   .chipbar::-webkit-scrollbar{display:none}
   .chip{white-space:nowrap;border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:14px;cursor:pointer;user-select:none}
   .chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
   .chip.count::after{content:attr(data-count);margin-left:6px;font-size:12px;opacity:.9}
 
-  /* ヘッダー/フッター隠しトグル（前回のPOSモード用） */
+  /* ヘッダー/フッターの手動非表示（POSモード） */
   header, .footbar { transition: transform .2s ease, opacity .2s ease; will-change: transform; }
   body.pos-hide-header header { transform: translateY(-100%); }
   body.pos-hide-footbar .footbar { transform: translateY(100%); }
@@ -77,7 +76,7 @@
   body.pos-hide-header main { padding-top: calc(10px + var(--safe-top)); }
   body.pos-hide-footbar main { padding-bottom: 16px; }
 
-  /* 右の浮遊ボタン（POSモード切替） */
+  /* 右の浮遊トグル */
   #uiToggles { position: fixed; right: 8px; bottom: calc(84px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 6px; z-index: 1000; }
   #uiToggles button { border-radius: 999px; padding: 8px 10px; font-size: 14px; background: rgba(0,0,0,.75); color: #fff; border: none; }
   #uiToggles button.secondary { background: rgba(0,0,0,.55); }
@@ -96,7 +95,6 @@
       <input id="cashier" placeholder="担当者" style="max-width:150px">
       <button id="btnFS">全画面</button>
       <button id="btnTheme">ダーク</button>
-      <button id="btnAutoPOS">自動POS: ON</button>
     </div>
   </div>
   <div class="row" style="margin-top:6px">
@@ -370,31 +368,43 @@ const els={
   stockList: gid("stockList"), stockAll: gid("stockAll"), stockFilter: gid("stockFilter"),
   stockQtyBulk: gid("stockQtyBulk"), stockApplyBulk: gid("stockApplyBulk"),
   btnRestockMany: gid("btnRestockMany"), btnWasteMany: gid("btnWasteMany"), btnStockClear: gid("btnStockClear"),
-  btnAutoPOS: gid("btnAutoPOS"), viewDense: gid("viewDense"), colsInc: gid("colsInc"), colsDec: gid("colsDec")
+  viewDense: gid("viewDense"), colsInc: gid("colsInc"), colsDec: gid("colsDec"),
+  toggleHeader: gid("toggleHeader"), toggleFootbar: gid("toggleFootbar")
 };
 
 /* ========= 状態 ========= */
-let items=read(LS_I,[
-  {id:crypto.randomUUID(),name:"じゃがバター",price:400,stock:200,sku:"JGBTR",cat:"フード",dPct:0,dYen:0},
-  {id:crypto.randomUUID(),name:"塩バター（トッピング）",price:50,stock:300,sku:"TOP-SALT",cat:"フード",dPct:0,dYen:0},
-  {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",cat:"フード",dPct:0,dYen:0},
-  {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",cat:"ドリンク",dPct:0,dYen:0}
-]);
-let txs=read(LS_T,[]);
-let cart=[];
-let misc=read(LS_MISC,{
+// 1) まず保存読み込み（JSON壊れ等で失敗したら null → デモ投入）
+let items = read(LS_I, null);
+let txs   = read(LS_T, []);
+let misc  = read(LS_MISC, {
   theme:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light',
   sale:{start:"",end:"",pct:0}, combo:{price:0}, volume:{n:0,pct:0},
   reminders:[], viewFrom:ymd(new Date()), viewTo:ymd(new Date()),
   uiHideHeader:false, uiHideFoot:false,
-  dense:false, tileMin:160,
-  autoPOS:true
+  dense:false, tileMin:160
 });
+// 2) items が未設定/配列でない/配列だが各要素に必須フィールドがない → デモ初期化（※既存があれば触らない）
+function needDemoSeed(arr){
+  if(!Array.isArray(arr) || arr.length===0) return true;
+  return !arr.every(it => it && typeof it.name==="string" && "price" in it && "stock" in it);
+}
+if(needDemoSeed(items)){
+  items=[
+    {id:crypto.randomUUID(),name:"じゃがバター",price:400,stock:200,sku:"JGBTR",cat:"フード",dPct:0,dYen:0},
+    {id:crypto.randomUUID(),name:"塩バター（トッピング）",price:50,stock:300,sku:"TOP-SALT",cat:"フード",dPct:0,dYen:0},
+    {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",cat:"フード",dPct:0,dYen:0},
+    {id:crypto.randomUUID(),name:"ドリンク（お茶）",price:150,stock:120,sku:"TEA",cat:"ドリンク",dPct:0,dYen:0}
+  ];
+  // ← 初回のみ保存（既存がある時は絶対に上書きしない）
+  write(LS_I, items);
+}
+let cart=[];
 
 /* ========= テーマ/FS/表示調整 ========= */
 function applyTheme(){document.documentElement.setAttribute('data-theme', misc.theme==='dark'?'dark':'light'); els.btnTheme.textContent=(misc.theme==='dark'?'ライト':'ダーク')}
 els.btnTheme.addEventListener('click',()=>{misc.theme=misc.theme==='dark'?'light':'dark'; write(LS_MISC,misc); applyTheme()})
 els.btnFS.addEventListener('click',()=>{if(!document.fullscreenElement){document.documentElement.requestFullscreen?.()}else{document.exitFullscreen?.()}})
+
 function applyCatalogView(){
   document.body.classList.toggle('compact', !!misc.dense);
   document.documentElement.style.setProperty('--tile-min', (misc.tileMin||160)+'px');
@@ -421,13 +431,12 @@ function buildCatChips(){
     ch.addEventListener('click',()=>{
       const c = ch.dataset.cat;
       activeCat = (c==="すべて") ? "" : c;
-      // 見た目反映
       els.catChips.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active', x===ch));
       renderCatalog();
     });
   });
 }
-function refreshCatOptions(){ // 既存selectは非表示運用だが中身は更新しておく
+function refreshCatOptions(){
   const cats=[...new Set(items.map(i=>i.cat||"未分類"))];
   els.catFilter.innerHTML='<option value="">すべて</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');
   buildCatChips();
@@ -474,7 +483,6 @@ function renderCatalog(){
   });
   renderStockList();
 }
-
 function editItem(id){
   const i=items.findIndex(x=>x.id===id); if(i<0) return;
   const it=items[i];
@@ -595,7 +603,14 @@ els.refund.addEventListener("click",()=>commit({refund:true}));
 els.clearBtn.addEventListener("click",()=>{cart=[];renderCart();updatePreview("")});
 
 /* ========= 期間サマリ/KPI ========= */
-function getRange(){const from=new Date(els.viewDateFrom.value+"T00:00:00"); const to=new Date(els.viewDateTo.value+"T00:00:00"); return {from,to}}
+function getRange(){
+  // 初期は「今日」をセット（※misc.viewFrom/To が無いときのみ）
+  if(!misc.viewFrom) misc.viewFrom = ymd(new Date());
+  if(!misc.viewTo) misc.viewTo = ymd(new Date());
+  const from=new Date(misc.viewFrom+"T00:00:00");
+  const to=new Date(misc.viewTo+"T00:00:00");
+  return {from,to}
+}
 function txInRange(){const r=getRange(); return txs.filter(tx=>!tx.void && between(tx.ts,r.from,r.to))}
 function renderSummary(){
   const r=getRange(); els.rangeS.textContent=`${r.from.toLocaleDateString("ja-JP")} 〜 ${r.to.toLocaleDateString("ja-JP")}`;
@@ -832,13 +847,6 @@ els.exportCredit.addEventListener("click",()=>{
   buildCreditMap().forEach(r=>rows.push([r.name,r.count,Math.round(r.amount)]));
   const blob=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="credit_unpaid.csv"; a.click();
 });
-els.markAllPaid.addEventListener("click",()=>{
-  const rows=buildCreditMap(); if(!rows.length) return alert("未払いはありません");
-  if(!confirm("表示中の未払いを全員『支払い済み』にします。よろしいですか？")) return;
-  const names=new Set(rows.map(r=>r.name));
-  txs = txs.map(tx=> (tx.credit?.enabled && names.has(tx.credit.name) && tx.credit.status==='unpaid') ? {...tx, credit:{...tx.credit, status:'paid'}} : tx );
-  write(LS_T,txs); renderCredit(); renderHistory(); renderSummary();
-});
 
 /* ========= リマインダー ========= */
 function renderReminders(){
@@ -857,25 +865,7 @@ setInterval(()=>{
   });
 }, 5000);
 
-/* ========= バックアップ/CSV/GAS同期 ========= */
-els.backupSave.addEventListener('click',()=>{
-  const blob=new Blob([JSON.stringify({items,txs,misc},null,2)],{type:"application/json"});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pos_backup.json'; a.click();
-});
-els.backupLoad.addEventListener('change',e=>{
-  const f=e.target.files[0]; if(!f) return;
-  const rd=new FileReader(); rd.onload=ev=>{
-    try{
-      const obj=JSON.parse(ev.target.result);
-      if(obj.items) items=obj.items;
-      if(obj.txs) txs=obj.txs;
-      if(obj.misc) misc=obj.misc;
-      write(LS_I,items); write(LS_T,txs); write(LS_MISC,misc);
-      applyTheme(); initRange(); refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit(); renderStockList(); applyCatalogView();
-      alert("バックアップを読み込みました");
-    }catch(e){alert("読込エラー: "+e.message)}
-  }; rd.readAsText(f);
-});
+/* ========= CSV/GAS同期 ========= */
 els.exportItems.addEventListener("click",()=>{
   const rows=[["name","price","stock","sku","cat","dPct","dYen"]];
   items.forEach(it=>rows.push([it.name,it.price,it.stock||0,it.sku||"",it.cat||"",it.dPct||0,it.dYen||0]));
@@ -892,10 +882,12 @@ els.importItems.addEventListener("change",e=>{
           iStock=header.indexOf("stock"), iSku=header.indexOf("sku"),
           iCat=header.indexOf("cat"), iDPct=header.indexOf("dPct"),
           iDYen=header.indexOf("dYen");
-    items = lines.map(r=>{
+    const next = lines.map(r=>{
       const c=r.split(",");
-      return {id:crypto.randomUUID(),name:c[iName],price:Number(c[iPrice]),stock:Number(c[iStock]||0),sku:c[iSku]||"",cat:(iCat>=0?c[iCat]:""),dPct:Number(c[iDPct]||0),dYen:Number(c[iDYen]||0)};
+      return {id:crypto.randomUUID(),name:c[iName],price:Number(c[iPrice]),stock(Number(c[iStock]||0)),sku:c[iSku]||"",cat:(iCat>=0?c[iCat]:""),dPct:Number(c[iDPct]||0),dYen:Number(c[iDYen]||0)};
     }).filter(x=>x.name && !isNaN(x.price));
+    if (!next.length) { alert("読み込む商品がありません"); return; }
+    items = next;
     write(LS_I,items); refreshCatOptions(); renderCatalog(); renderItemAgg(); renderStockList();
   };
   reader.readAsText(f);
@@ -967,52 +959,38 @@ function updatePreview(value){
 function applyChromeVisibility(){
   document.body.classList.toggle('pos-hide-header', !!misc.uiHideHeader);
   document.body.classList.toggle('pos-hide-footbar', !!misc.uiHideFoot);
-  const bh = document.getElementById('toggleHeader');
-  const bf = document.getElementById('toggleFootbar');
-  if (bh) bh.textContent = misc.uiHideHeader ? '↓ ヘッダー再表示' : '↑ ヘッダー非表示';
-  if (bf) bf.textContent = misc.uiHideFoot ? '↑ 会計バー再表示' : '↓ 会計バー非表示';
+  if (els.toggleHeader) els.toggleHeader.textContent = misc.uiHideHeader ? '↓ ヘッダー再表示' : '↑ ヘッダー非表示';
+  if (els.toggleFootbar) els.toggleFootbar.textContent = misc.uiHideFoot ? '↑ 会計バー再表示' : '↓ 会計バー非表示';
 }
-document.getElementById('toggleHeader')?.addEventListener('click', ()=>{ misc.uiHideHeader = !misc.uiHideHeader; write(LS_MISC, misc); applyChromeVisibility(); localStorage.setItem('x_ui_touched','1');});
-document.getElementById('toggleFootbar')?.addEventListener('click', ()=>{ misc.uiHideFoot = !misc.uiHideFoot; write(LS_MISC, misc); applyChromeVisibility(); localStorage.setItem('x_ui_touched','1');});
-
-/* 自動POSモード */
-function shouldAutoPOS(){
-  const smallScreen = window.matchMedia('(max-width: 480px)').matches;
-  const tallPortrait = window.matchMedia('(orientation: portrait)').matches && window.innerHeight < 760;
-  const isStandalone = (window.matchMedia('(display-mode: standalone)').matches) || (window.navigator.standalone === true);
-  return smallScreen || tallPortrait || isStandalone;
-}
-function applyAutoPOSIfNeeded(){
-  if (!misc.autoPOS) return;
-  const touched = localStorage.getItem('x_ui_touched') === '1';
-  if (!touched && shouldAutoPOS()){
-    misc.uiHideHeader = true; misc.uiHideFoot = true; write(LS_MISC, misc); applyChromeVisibility();
-  }
-}
-if(els.btnAutoPOS){
-  const reflect=()=>{els.btnAutoPOS.textContent='自動POS: '+(misc.autoPOS?'ON':'OFF')};
-  reflect();
-  els.btnAutoPOS.addEventListener('click',()=>{misc.autoPOS=!misc.autoPOS; write(LS_MISC,misc); reflect(); applyAutoPOSIfNeeded();});
-}
-window.addEventListener('orientationchange', ()=>applyAutoPOSIfNeeded());
-window.addEventListener('resize', ()=>applyAutoPOSIfNeeded());
+els.toggleHeader?.addEventListener('click', ()=>{ misc.uiHideHeader = !misc.uiHideHeader; write(LS_MISC, misc); applyChromeVisibility();});
+els.toggleFootbar?.addEventListener('click', ()=>{ misc.uiHideFoot = !misc.uiHideFoot; write(LS_MISC, misc); applyChromeVisibility();});
 
 /* ========= 日付レンジ ========= */
-function initRange(){ els.viewDateFrom.value = misc.viewFrom || ymd(new Date()); els.viewDateTo.value = misc.viewTo || ymd(new Date()); }
-[els.viewDateFrom,els.viewDateTo].forEach(el=>el.addEventListener('change',()=>{misc.viewFrom=els.viewDateFrom.value; misc.viewTo=els.viewDateTo.value; write(LS_MISC,misc); refreshAll(); renderCredit()}));
-els.viewToday.addEventListener('click',()=>{const t=ymd(new Date()); els.viewDateFrom.value=t; els.viewDateTo.value=t; misc.viewFrom=t; misc.viewTo=t; write(LS_MISC,misc); refreshAll(); renderCredit()});
-
-/* ========= 全体再描画 ========= */
-function refreshAll(){renderSummary(); renderItemAgg(); drawDashboard(); calcStockWarnings(); renderHistory()}
+function initRange(){
+  // 初回ロード時に「今日」をセットし、以後は misc を尊重
+  if(!misc.viewFrom) misc.viewFrom = ymd(new Date());
+  if(!misc.viewTo) misc.viewTo = ymd(new Date());
+  const vf = gid("viewDateFrom"); const vt = gid("viewDateTo");
+  if(vf && vt){
+    vf.value = misc.viewFrom; vt.value = misc.viewTo;
+    [vf,vt].forEach(el=>el.addEventListener('change',()=>{
+      misc.viewFrom=vf.value; misc.viewTo=vt.value; write(LS_MISC,misc); refreshAll(); renderCredit()
+    }));
+  }
+}
 
 /* ========= 初期描画 ========= */
+function refreshAll(){renderSummary(); renderItemAgg(); drawDashboard(); calcStockWarnings(); renderHistory()}
 function init(){
   applyTheme(); applyCatalogView();
+  // 入力の復元
   els.cashier.value = read("x_cashier",""); els.cashier.addEventListener("input",()=>localStorage.setItem("x_cashier",JSON.stringify(els.cashier.value)));
   const goalSaved=read("x_goal",""); if(goalSaved) els.goal.value=goalSaved; els.goal.addEventListener("input",()=>localStorage.setItem("x_goal",JSON.stringify((els.goal.value||"").replace(/[^0-9]/g,""))));
   const lowSaved=read("x_low",""); if(lowSaved) els.low.value=lowSaved; els.low.addEventListener("input",()=>localStorage.setItem("x_low",JSON.stringify((els.low.value||"").replace(/[^0-9]/g,""))));
+  // 検索は空に（※前回の自動補完で「見えてないだけ」問題を防ぐ）
+  els.search.value=""; activeCat="";
+
   els.search.addEventListener("input",renderCatalog);
-  refreshCatOptions();
   gid("newItemBtn").addEventListener("click",()=>{ els.newForm.style.display = els.newForm.style.display==='none'?'flex':'none'; });
   gid("addItem").addEventListener("click",()=>{
     const name=els.newName.value.trim(); const price=parseNum(els.newPrice.value); const stock=parseNum(els.newStock.value);
@@ -1034,14 +1012,17 @@ function init(){
     write(LS_I,items); refreshCatOptions(); renderCatalog(); renderStockList();
   });
 
-  renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit();
-  initRange(); renderStockList();
-  write(LS_I,items); write(LS_T,txs); write(LS_MISC,misc);
+  // 初期描画
+  refreshCatOptions(); renderCatalog(); renderCart(); refreshAll(); renderReminders(); renderCredit(); initRange(); renderStockList();
 
+  // ここで localStorage へ「上書き保存」はしない！（消失対策）
+  // write(LS_I,items); ←禁止
+  // write(LS_T,txs);   ←不要。取引は発生時のみ保存
+
+  // POSモードの復元
   if (misc.uiHideHeader === undefined) misc.uiHideHeader = false;
   if (misc.uiHideFoot   === undefined) misc.uiHideFoot   = false;
   applyChromeVisibility();
-  applyAutoPOSIfNeeded();
 }
 init();
 
