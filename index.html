@@ -612,6 +612,7 @@
 <script>
 /* ========= 基本ユーティリティ ========= */
 const LS_I   = "x_items_v1";
+const LS_UNSENT = "x_unsent_txs_v1";   // 未送信の取引キュー
 const LS_T   = "x_txs_v1";
 const LS_MISC= "x_misc_v1";
 const WKEY   = "komaba_pos_gas_webhook_v1";
@@ -739,6 +740,7 @@ const els = {
 
 /* ========= 状態 ========= */
 let items = read(LS_I, null);
+let unsentTxs = read(LS_UNSENT, []);
 let txs   = read(LS_T, []);
 let misc  = read(LS_MISC, {
   theme:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light',
@@ -1102,23 +1104,24 @@ function commit(opts={refund:false}){
 
   const t = totals();
   const onCredit = gid('creditFlag').checked;
+
   const tx = {
-    id:Date.now()+""+Math.random().toString(36).slice(2),
-    ts:Date.now(),
-    lines:JSON.parse(JSON.stringify(cart)),
-    payment:onCredit?"掛売":els.pay.value,
-    cashier:els.cashier.value||"",
-    subtotal_after_line:t.subAfterLine,
-    order_discount:t.orderDisc,
-    promo_discount:t.promoDisc,
-    total:(t.subAfterLine - t.orderDisc - t.promoDisc)*(opts.refund?-1:1),
-    refund:!!opts.refund,
-    void:false,
-    memo:(els.orderMemo.value||""),
-    credit:{
-      enabled:onCredit,
-      name:(gid('creditWho').value||"").trim(),
-      status:onCredit?(gid('creditStatus').value||"unpaid"):"none"
+    id: Date.now()+""+Math.random().toString(36).slice(2),
+    ts: Date.now(),
+    lines: JSON.parse(JSON.stringify(cart)),
+    payment: onCredit ? "掛売" : els.pay.value,
+    cashier: els.cashier.value||"",
+    subtotal_after_line: t.subAfterLine,
+    order_discount: t.orderDisc,
+    promo_discount: t.promoDisc,
+    total: (t.subAfterLine - t.orderDisc - t.promoDisc) * (opts.refund ? -1 : 1),
+    refund: !!opts.refund,
+    void: false,
+    memo: (els.orderMemo.value||""),
+    credit: {
+      enabled: onCredit,
+      name: (gid('creditWho').value||"").trim(),
+      status: onCredit ? (gid('creditStatus').value||"unpaid") : "none"
     }
   };
 
@@ -1126,19 +1129,23 @@ function commit(opts={refund:false}){
     // 在庫を減らす
     items = items.map(it=>{
       const l = cart.find(x=>x.id===it.id);
-      return l ? {...it, stock:Math.max(0,it.stock-l.qty)} : it;
+      return l ? {...it, stock: Math.max(0, it.stock - l.qty)} : it;
     });
   }else{
     // 返金 → 在庫を戻す
     items = items.map(it=>{
       const l = cart.find(x=>x.id===it.id);
-      return l ? {...it, stock:it.stock+l.qty} : it;
+      return l ? {...it, stock: it.stock + l.qty} : it;
     });
   }
 
-  write(LS_I,items);
-  txs = [tx,...txs];
-  write(LS_T,txs);
+  // ローカル保存
+  write(LS_I, items);
+  txs = [tx, ...txs];
+  write(LS_T, txs);
+
+  // ★ ここで「未送信キュー」に積んで Google シートに自動同期
+  enqueueTxForGoogle(tx);
 
   // カートクリア
   cart = [];
@@ -1150,6 +1157,7 @@ function commit(opts={refund:false}){
   gid('creditWho').value = "";
   gid('creditStatus').value = "unpaid";
 
+  // 各種再描画
   renderCatalog();
   renderCart();
   renderSummary();
@@ -1160,6 +1168,7 @@ function commit(opts={refund:false}){
   renderCredit();
   renderStockList();
   updatePreview("");
+
   beep();
 }
 els.commit.addEventListener("click",()=>commit());
@@ -1782,42 +1791,219 @@ els.backupLoad.addEventListener('change',e=>{
   e.target.value = "";
 });
 
-// GAS同期
-async function fetchWithTimeout(input,init={},ms=15000){
-  const ctrl = new AbortController();
-  const id   = setTimeout(()=>ctrl.abort(),ms);
-  try{
-    return await fetch(input,{...init,signal:ctrl.signal});
-  }finally{
-    clearTimeout(id);
-  }
+/* ========= GAS同期
+  - 取引ごと自動送信（未送信キュー付き）
+  - 在庫の双方向同期（シート → POS は定期 pull）
+  - 手動フル同期ボタン（既存の「Googleシート同期」ボタン）
+========= */
+
+// 未送信キューを保存
+function saveUnsentTxs(){
+  write(LS_UNSENT, unsentTxs);
 }
-els.syncGoogle.addEventListener("click", async ()=>{
+
+// 送信用にスリム化した取引データを作る
+function slimTx(tx){
+  return {
+    id: tx.id,
+    ts: tx.ts,
+    payment: tx.payment,
+    cashier: tx.cashier,
+    subtotal_after_line: tx.subtotal_after_line,
+    order_discount: tx.order_discount,
+    promo_discount: tx.promo_discount,
+    total: tx.total,
+    refund: tx.refund,
+    void: tx.void,
+    memo: tx.memo,
+    credit: tx.credit,
+    lines: (tx.lines||[]).map(l=>({
+      id: l.id,
+      name: l.name,
+      sku: l.sku||"",
+      cat: l.cat||"",
+      qty: l.qty,
+      price: l.price,
+      lineDiscPct: l.lineDiscPct||0,
+      lineDiscYen: l.lineDiscYen||0
+    }))
+  };
+}
+
+// シート側に渡す items スナップショット
+function buildItemsPayload(){
+  return items.map(it=>({
+    id: it.id,
+    name: it.name,
+    sku: it.sku||"",
+    cat: it.cat||"",
+    price: it.price,
+    stock: it.stock,
+    dPct: it.dPct||0,
+    dYen: it.dYen||0
+  }));
+}
+
+// 取引1件を未送信キューに積んで、自動同期をスケジュール
+function enqueueTxForGoogle(tx){
+  unsentTxs.push(slimTx(tx));
+  saveUnsentTxs();
+  scheduleAutoSync();
+}
+
+let syncing = false;
+let syncTimer = null;
+
+// 自動同期の遅延実行（連打してもまとめて送る）
+function scheduleAutoSync(){
+  if(syncTimer || syncing) return;
+  syncTimer = setTimeout(()=>runAutoSync(false), 1200);
+}
+
+// 共通の送信処理
+async function runAutoSync(manual){
+  if(syncTimer){
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+  if(syncing) return;
+
   let url = localStorage.getItem(WKEY) || "";
-  url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（必ず /exec）", url);
-  if(!url) return;
-  localStorage.setItem(WKEY,url);
-  try{
-    const ping = await fetchWithTimeout(url,{method:"GET",cache:"no-store"},8000);
-    const pingText = await ping.text().catch(()=>"(no body)");
-    logSync(`PING: HTTP ${ping.status}\n${pingText}`);
-    if(!ping.ok){
-      alert(`同期エラー: /exec 応答 ${ping.status}\n${pingText}`);
+
+  // 手動同期のときだけ URL を聞く
+  if(!url){
+    if(!manual){
+      logSync("Webhook URL が未設定のため、未送信キューに貯めています（「Googleシート同期」ボタンで送信）。");
       return;
     }
+    url = prompt("Apps Script の Webhook URL（必ず /exec）を入力してください", "");
+    if(!url) return;
+    localStorage.setItem(WKEY, url);
+  }
+
+  // 送信する取引
+  const txPayload = manual ? txs.map(slimTx) : [...unsentTxs];
+  if(!txPayload.length && !manual){
+    // 自動同期で送るものがない
+    return;
+  }
+
+  const payload = {
+    mode: manual ? "fullSync" : "pushTx",  // GAS 側で分岐させる
+    txs: txPayload,
+    items: buildItemsPayload()
+  };
+
+  syncing = true;
+  try{
+    // 軽く /GET で ping（任意）
+    try{
+      const ping = await fetchWithTimeout(url,{method:"GET",cache:"no-store"},8000);
+      const pt = await ping.text().catch(()=>"(no body)");
+      logSync(`PING: HTTP ${ping.status}\n${pt}`);
+    }catch(e){
+      // ping 失敗は致命的ではないのでログだけ
+      logSync("PING エラー: "+e.message);
+    }
+
+    // 本送信
     const res = await fetchWithTimeout(url,{
       method:"POST",
-      headers:{"Content-Type":"text/plain"},
-      body:JSON.stringify({txs})
-    },15000);
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(payload)
+    }, 20000);
+
     const text = await res.text().catch(()=>"(no body)");
     logSync(`POST: HTTP ${res.status}\n${text}`);
-    alert(res.ok ? "同期完了" : `同期失敗 (${res.status})`);
+
+    if(res.ok){
+      // 成功したら未送信キューをクリア
+      unsentTxs = [];
+      saveUnsentTxs();
+    }else{
+      warnBeep();
+    }
   }catch(e){
-    alert("同期エラー: "+e.message);
-    logSync("例外: "+e.message);
+    logSync("同期エラー: "+e.message);
+  }finally{
+    syncing = false;
   }
+}
+
+// 手動同期ボタン（「Googleシート同期」）
+// → すべての取引＋現在の在庫をシートに送り直す「フル同期」
+els.syncGoogle.addEventListener("click", async ()=>{
+  await runAutoSync(true);
+  alert("Google シート同期処理を実行しました（詳細は下の同期ログを確認してください）。");
 });
+
+/* ====== シート → POS 方向の在庫 pull（双方向同期） ====== */
+// GAS 側で ?mode=pullState に対して JSON を返すようにしておく:
+//
+//  {
+//    "items":[
+//       {"id":"...","sku":"...","stock":123, ...},
+//       ...
+//    ],
+//    "summary": { ... 本部用ダッシュボードに使う集計 ... }
+//  }
+//
+async function pullFromSheet(){
+  const url = localStorage.getItem(WKEY);
+  if(!url) return;
+  try{
+    const res = await fetchWithTimeout(url+"?mode=pullState", {
+      method:"GET",
+      cache:"no-store"
+    }, 15000);
+    if(!res.ok) return;
+
+    const data = await res.json().catch(()=>null);
+    if(!data) return;
+
+    // 在庫の更新（id があれば id 優先、なければ sku でマッチ）
+    if(Array.isArray(data.items)){
+      let changed = false;
+      items = items.map(local=>{
+        const remote = data.items.find(r =>
+          (r.id && r.id===local.id) ||
+          (r.sku && r.sku === local.sku)
+        );
+        if(!remote) return local;
+        const newStock = parseNum(remote.stock ?? local.stock);
+        if(!Number.isNaN(newStock) && newStock !== local.stock){
+          changed = true;
+          return {...local, stock:newStock};
+        }
+        return local;
+      });
+      if(changed){
+        write(LS_I, items);
+        renderCatalog();
+        renderItemAgg();
+        renderStockList();
+        calcStockWarnings();
+        logSync("シート側の在庫を取り込みました。");
+      }
+    }
+
+    // 本部用ダッシュボード用の集計情報があれば、ここで使う（任意）
+    if(data.summary){
+      // 例: data.summary.totalSales などをログに表示
+      logSync("シートから集計情報を取得しました。\n"+JSON.stringify(data.summary,null,2));
+    }
+  }catch(e){
+    logSync("pull エラー: "+e.message);
+  }
+}
+
+// 起動時に未送信キューがあれば自動同期を試みる
+if(unsentTxs.length){
+  scheduleAutoSync();
+}
+
+// シート → POS 方向の在庫更新 & 本部モニタ用データ取得を 30秒ごとに実行
+setInterval(pullFromSheet, 30000);
 
 /* ========= オンスクリーンテンキー＋右上プレビュー ========= */
 function updatePreview(value){
