@@ -762,11 +762,28 @@ function needDemoSeed(arr){
 }
 if(needDemoSeed(items)){
   items = [
-    {id:crypto.randomUUID(),name:"じゃがバター",price:400,stock:200,sku:"JGBTR",cat:"メイン",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"塩バター（トッピング）",price:50,stock:300,sku:"TOP-SALT",cat:"トッピング",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"コーンバター",price:450,stock:150,sku:"CORN",cat:"メイン",dPct:0,dYen:0},
-    {id:crypto.randomUUID(),name:"バター増し増し",price:80,stock:300,sku:"ADD-BTR",cat:"トッピング",dPct:0,dYen:0}
+    {
+      id: crypto.randomUUID(),
+      name: "じゃがバター（塩）",
+      price: 400,
+      stock: 200,          // 在庫は適当に。あとからUIから変えられる
+      sku: "JGBTR-SALT",
+      cat: "フード",
+      dPct: 0,
+      dYen: 0
+    },
+    {
+      id: crypto.randomUUID(),
+      name: "じゃがバター（チーズ）",
+      price: 450,
+      stock: 200,
+      sku: "JGBTR-CHEESE",
+      cat: "フード",
+      dPct: 0,
+      dYen: 0
+    }
   ];
+  // 初回のみ保存（既存がある時は上書きしない）
   write(LS_I, items);
 }
 
