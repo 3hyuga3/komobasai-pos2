@@ -1791,219 +1791,61 @@ els.backupLoad.addEventListener('change',e=>{
   e.target.value = "";
 });
 
-/* ========= GAS同期
-  - 取引ごと自動送信（未送信キュー付き）
-  - 在庫の双方向同期（シート → POS は定期 pull）
-  - 手動フル同期ボタン（既存の「Googleシート同期」ボタン）
-========= */
-
-// 未送信キューを保存
-function saveUnsentTxs(){
-  write(LS_UNSENT, unsentTxs);
-}
-
-// 送信用にスリム化した取引データを作る
-function slimTx(tx){
-  return {
-    id: tx.id,
-    ts: tx.ts,
-    payment: tx.payment,
-    cashier: tx.cashier,
-    subtotal_after_line: tx.subtotal_after_line,
-    order_discount: tx.order_discount,
-    promo_discount: tx.promo_discount,
-    total: tx.total,
-    refund: tx.refund,
-    void: tx.void,
-    memo: tx.memo,
-    credit: tx.credit,
-    lines: (tx.lines||[]).map(l=>({
-      id: l.id,
-      name: l.name,
-      sku: l.sku||"",
-      cat: l.cat||"",
-      qty: l.qty,
-      price: l.price,
-      lineDiscPct: l.lineDiscPct||0,
-      lineDiscYen: l.lineDiscYen||0
-    }))
-  };
-}
-
-// シート側に渡す items スナップショット
-function buildItemsPayload(){
-  return items.map(it=>({
-    id: it.id,
-    name: it.name,
-    sku: it.sku||"",
-    cat: it.cat||"",
-    price: it.price,
-    stock: it.stock,
-    dPct: it.dPct||0,
-    dYen: it.dYen||0
-  }));
-}
-
-// 取引1件を未送信キューに積んで、自動同期をスケジュール
-function enqueueTxForGoogle(tx){
-  unsentTxs.push(slimTx(tx));
-  saveUnsentTxs();
-  scheduleAutoSync();
-}
-
-let syncing = false;
-let syncTimer = null;
-
-// 自動同期の遅延実行（連打してもまとめて送る）
-function scheduleAutoSync(){
-  if(syncTimer || syncing) return;
-  syncTimer = setTimeout(()=>runAutoSync(false), 1200);
-}
-
-// 共通の送信処理
-async function runAutoSync(manual){
-  if(syncTimer){
-    clearTimeout(syncTimer);
-    syncTimer = null;
+// GAS同期
+async function fetchWithTimeout(input,init={},ms=15000){
+  const ctrl = new AbortController();
+  const id   = setTimeout(()=>ctrl.abort(),ms);
+  try{
+    return await fetch(input,{...init,signal:ctrl.signal});
+  }finally{
+    clearTimeout(id);
   }
-  if(syncing) return;
+}
 
+els.syncGoogle.addEventListener("click", async ()=>{
+  // 1. Webhook URL を保存＆取得
   let url = localStorage.getItem(WKEY) || "";
+  url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（必ず https://.../exec）", url);
+  if(!url) return;
+  localStorage.setItem(WKEY,url);
 
-  // 手動同期のときだけ URL を聞く
-  if(!url){
-    if(!manual){
-      logSync("Webhook URL が未設定のため、未送信キューに貯めています（「Googleシート同期」ボタンで送信）。");
+  // 2. 送信データ作成（取引 + 商品）
+  const payload = {
+    mode: "pushTx",   // GAS 側 handlePushTx_ が受け取る
+    txs,
+    items
+  };
+
+  try{
+    // 3. GET で PING（GAS OK が返ってくる想定）
+    const ping = await fetchWithTimeout(url,{method:"GET",cache:"no-store"},8000);
+    const pingText = await ping.text().catch(()=>"(no body)");
+    logSync(`PING: HTTP ${ping.status}\n${pingText}`);
+    if(!ping.ok){
+      alert(`同期エラー: /exec 応答 ${ping.status}\n${pingText}`);
       return;
     }
-    url = prompt("Apps Script の Webhook URL（必ず /exec）を入力してください", "");
-    if(!url) return;
-    localStorage.setItem(WKEY, url);
-  }
 
-  // 送信する取引
-  const txPayload = manual ? txs.map(slimTx) : [...unsentTxs];
-  if(!txPayload.length && !manual){
-    // 自動同期で送るものがない
-    return;
-  }
-
-  const payload = {
-    mode: manual ? "fullSync" : "pushTx",  // GAS 側で分岐させる
-    txs: txPayload,
-    items: buildItemsPayload()
-  };
-
-  syncing = true;
-  try{
-    // 軽く /GET で ping（任意）
-    try{
-      const ping = await fetchWithTimeout(url,{method:"GET",cache:"no-store"},8000);
-      const pt = await ping.text().catch(()=>"(no body)");
-      logSync(`PING: HTTP ${ping.status}\n${pt}`);
-    }catch(e){
-      // ping 失敗は致命的ではないのでログだけ
-      logSync("PING エラー: "+e.message);
-    }
-
-    // 本送信
+    // 4. POST で本同期
     const res = await fetchWithTimeout(url,{
       method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify(payload)
-    }, 20000);
+      headers:{"Content-Type":"text/plain"},
+      body:JSON.stringify(payload)
+    },15000);
 
     const text = await res.text().catch(()=>"(no body)");
     logSync(`POST: HTTP ${res.status}\n${text}`);
 
     if(res.ok){
-      // 成功したら未送信キューをクリア
-      unsentTxs = [];
-      saveUnsentTxs();
+      alert("同期完了");
     }else{
-      warnBeep();
+      alert(`同期失敗 (${res.status})`);
     }
   }catch(e){
-    logSync("同期エラー: "+e.message);
-  }finally{
-    syncing = false;
+    alert("同期エラー: "+e.message);
+    logSync("例外: "+e.message);
   }
-}
-
-// 手動同期ボタン（「Googleシート同期」）
-// → すべての取引＋現在の在庫をシートに送り直す「フル同期」
-els.syncGoogle.addEventListener("click", async ()=>{
-  await runAutoSync(true);
-  alert("Google シート同期処理を実行しました（詳細は下の同期ログを確認してください）。");
 });
-
-/* ====== シート → POS 方向の在庫 pull（双方向同期） ====== */
-// GAS 側で ?mode=pullState に対して JSON を返すようにしておく:
-//
-//  {
-//    "items":[
-//       {"id":"...","sku":"...","stock":123, ...},
-//       ...
-//    ],
-//    "summary": { ... 本部用ダッシュボードに使う集計 ... }
-//  }
-//
-async function pullFromSheet(){
-  const url = localStorage.getItem(WKEY);
-  if(!url) return;
-  try{
-    const res = await fetchWithTimeout(url+"?mode=pullState", {
-      method:"GET",
-      cache:"no-store"
-    }, 15000);
-    if(!res.ok) return;
-
-    const data = await res.json().catch(()=>null);
-    if(!data) return;
-
-    // 在庫の更新（id があれば id 優先、なければ sku でマッチ）
-    if(Array.isArray(data.items)){
-      let changed = false;
-      items = items.map(local=>{
-        const remote = data.items.find(r =>
-          (r.id && r.id===local.id) ||
-          (r.sku && r.sku === local.sku)
-        );
-        if(!remote) return local;
-        const newStock = parseNum(remote.stock ?? local.stock);
-        if(!Number.isNaN(newStock) && newStock !== local.stock){
-          changed = true;
-          return {...local, stock:newStock};
-        }
-        return local;
-      });
-      if(changed){
-        write(LS_I, items);
-        renderCatalog();
-        renderItemAgg();
-        renderStockList();
-        calcStockWarnings();
-        logSync("シート側の在庫を取り込みました。");
-      }
-    }
-
-    // 本部用ダッシュボード用の集計情報があれば、ここで使う（任意）
-    if(data.summary){
-      // 例: data.summary.totalSales などをログに表示
-      logSync("シートから集計情報を取得しました。\n"+JSON.stringify(data.summary,null,2));
-    }
-  }catch(e){
-    logSync("pull エラー: "+e.message);
-  }
-}
-
-// 起動時に未送信キューがあれば自動同期を試みる
-if(unsentTxs.length){
-  scheduleAutoSync();
-}
-
-// シート → POS 方向の在庫更新 & 本部モニタ用データ取得を 30秒ごとに実行
-setInterval(pullFromSheet, 30000);
 
 /* ========= オンスクリーンテンキー＋右上プレビュー ========= */
 function updatePreview(value){
