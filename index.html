@@ -1791,7 +1791,7 @@ els.backupLoad.addEventListener('change',e=>{
   e.target.value = "";
 });
 
-// GAS同期
+// GAS同期（完全版）
 async function fetchWithTimeout(input,init={},ms=15000){
   const ctrl = new AbortController();
   const id   = setTimeout(()=>ctrl.abort(),ms);
