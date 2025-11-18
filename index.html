@@ -561,15 +561,21 @@
         <input id="remAt" type="time">
         <button id="remSet">セット</button>
 
-        <button id="backupSave">バックアップ保存(JSON)</button>
-        <input type="file" id="backupLoad" style="display:none" />
-        <button onclick="document.getElementById('backupLoad').click()">バックアップ読込</button>
+<button id="remSet">セット</button>
 
-        <button id="exportTx">取引CSV</button>
-        <button id="exportItems">商品CSV</button>
-        <input type="file" id="importItems" style="display:none">
-        <button onclick="document.getElementById('importItems').click()">商品CSV読込</button>
-        <button id="syncGoogle">Googleシート同期</button>
+<!-- ★ここから追加 -->
+<button id="resetTxAll" class="danger">取引データ初期化（本番前に1回だけ）</button>
+<!-- ★ここまで追加 -->
+
+<button id="backupSave">バックアップ保存(JSON)</button>
+<input type="file" id="backupLoad" style="display:none" />
+<button onclick="document.getElementById('backupLoad').click()">バックアップ読込</button>
+
+<button id="exportTx">取引CSV</button>
+<button id="exportItems">商品CSV</button>
+<input type="file" id="importItems" style="display:none">
+<button onclick="document.getElementById('importItems').click()">商品CSV読込</button>
+<button id="syncGoogle">Googleシート同期</button>
       </div>
     </div>
     <div id="remList" class="muted" style="margin-top:6px"></div>
@@ -716,6 +722,7 @@ const els = {
   backupSave:gid("backupSave"),
   backupLoad:gid("backupLoad"),
   syncGoogle:gid("syncGoogle"),
+  resetTxAll:gid("resetTxAll"),   // ★追加
   creditTable:gid("creditTable"),
   creditTotal:gid("creditTotal"),
   exportCredit:gid("exportCredit"),
@@ -1632,6 +1639,31 @@ setInterval(()=>{
     }
   });
 },5000);
+/* ========= 取引データ全削除ボタン（本番前リセット用） ========= */
+els.resetTxAll.addEventListener('click', () => {
+  if (!confirm("⚠️ ローカルの取引履歴（デモ時代を含む）をすべて削除します。本番開始前に1回だけ押してください。本当に実行しますか？")) {
+    return;
+  }
+
+  // ローカル変数を空に
+  txs = [];
+  unsentTxs = [];
+
+  // localStorage 側も上書き
+  write(LS_T, txs);
+  write(LS_UNSENT, unsentTxs);
+
+  // 画面の集計・履歴などをリフレッシュ
+  renderSummary();
+  renderItemAgg();
+  renderHistory();
+  drawDashboard();
+  renderCredit();
+  calcStockWarnings();
+  renderStockList();
+
+  alert("ローカルの取引データを削除しました。\nスプレッドシート側の不要な行も削除してから、もう一度同期してください。");
+});
 
 /* ========= CSV / バックアップ / GAS同期 ========= */
 // 商品CSV
