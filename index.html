@@ -1124,7 +1124,11 @@ function commit(opts={refund:false}){
   }
 
   const t = totals();
-  const onCredit = els.creditFlag.checked;
+  const onCredit = gid('creditFlag').checked;
+
+  // ★ここで「受取金額」と「お釣り」を計算しておく
+  const received = parseNum(els.cashReceived.value);               // 受け取った金額
+  const change   = Math.max(0, received - t.total);                // お釣り（マイナスは0扱い）
 
   const tx = {
     id: Date.now()+""+Math.random().toString(36).slice(2),
@@ -1141,10 +1145,19 @@ function commit(opts={refund:false}){
     memo: (els.orderMemo.value||""),
     credit: {
       enabled: onCredit,
-      name: (els.creditWho.value||"").trim(),
-      status: onCredit ? (els.creditStatus.value||"unpaid") : "none"
-    }
+      name: (gid('creditWho').value||"").trim(),
+      status: onCredit ? (gid('creditStatus").value||"unpaid") : "none"
+    },
+
+    // ★ここから追加（シートに送りたい2つの値）
+    cashReceived: received,   // 受取金額
+    change: change            // お釣り
+    // ★ここまで追加
   };
+
+  // この下は今まで通り（在庫更新→保存→同期キュー→描画）
+  …
+}
 
   // ★ 未送信キューに積む（ここが方法A）
   enqueueTxForGoogle(tx);
