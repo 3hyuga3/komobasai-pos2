@@ -617,12 +617,6 @@ const LS_T   = "x_txs_v1";
 const LS_MISC= "x_misc_v1";
 const WKEY   = "komaba_pos_gas_webhook_v1";
 
-// 安全なID発行（crypto.randomUUID が無い環境にも対応）
-function newId(){
-  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-  return "id-" + Date.now() + "-" + Math.random().toString(16).slice(2);
-}
-
 function gid(id){return document.getElementById(id);}
 function read(k,d){try{return JSON.parse(localStorage.getItem(k)) ?? d;}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
@@ -659,16 +653,6 @@ function warnBeep(){
   if(navigator.vibrate) navigator.vibrate([60,40,60]);
 }
 function logSync(t){gid("syncLog").textContent="【同期ログ】\n"+t}
-
-/* ★ GASに送る用：取引を未送信キューに積む（今はローカル保存だけ） */
-function enqueueTxForGoogle(tx){
-  try{
-    unsentTxs.push(tx);
-    write(LS_UNSENT, unsentTxs);
-  }catch(e){
-    console.error("enqueueTxForGoogle error", e);
-  }
-}
 
 /* ========= 要素参照 ========= */
 const els = {
@@ -751,12 +735,15 @@ const els = {
   toggleFootbar: gid("toggleFootbar"),
   viewDateFrom: gid("viewDateFrom"),
   viewDateTo: gid("viewDateTo"),
-  viewToday: gid("viewToday")
+  viewToday: gid("viewToday"),
+  creditFlag: gid("creditFlag"),
+  creditWho: gid("creditWho"),
+  creditStatus: gid("creditStatus")
 };
 
 /* ========= 状態 ========= */
 let items = read(LS_I, null);
-let unsentTxs = read(LS_UNSENT, []);
+let unsentTxs = read(LS_UNSENT, []);  // ★ 未送信キュー
 let txs   = read(LS_T, []);
 let misc  = read(LS_MISC, {
   theme:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light',
@@ -773,6 +760,18 @@ let misc  = read(LS_MISC, {
 });
 let cart = [];
 
+/* ========= 未送信キューに積む関数（方法Aの中枢） ========= */
+function enqueueTxForGoogle(tx){
+  if (!tx || !tx.id) return;
+  const idx = unsentTxs.findIndex(t => t.id === tx.id);
+  if (idx >= 0) {
+    unsentTxs[idx] = tx;
+  } else {
+    unsentTxs.push(tx);
+  }
+  write(LS_UNSENT, unsentTxs);
+}
+
 // itemsが壊れていたらデモ初期化（フード用）
 function needDemoSeed(arr){
   if(!Array.isArray(arr) || arr.length===0) return true;
@@ -781,7 +780,7 @@ function needDemoSeed(arr){
 if(needDemoSeed(items)){
   items = [
     {
-      id: newId(),
+      id: crypto.randomUUID(),
       name: "じゃがバター（塩）",
       price: 400,
       stock: 200,          // 在庫は適当に。あとからUIから変えられる
@@ -791,7 +790,7 @@ if(needDemoSeed(items)){
       dYen: 0
     },
     {
-      id: newId(),
+      id: crypto.randomUUID(),
       name: "じゃがバター（チーズ）",
       price: 450,
       stock: 200,
@@ -865,11 +864,6 @@ function buildCatChips(){
       renderCatalog();
     });
   });
-}
-
-// カテゴリ表示をまとめて更新するラッパ
-function refreshCatOptions(){
-  buildCatChips();
 }
 
 /* ========= 商品一覧 ========= */
@@ -1123,7 +1117,7 @@ function commit(opts={refund:false}){
   }
 
   const t = totals();
-  const onCredit = gid('creditFlag').checked;
+  const onCredit = els.creditFlag.checked;
 
   const tx = {
     id: Date.now()+""+Math.random().toString(36).slice(2),
@@ -1140,10 +1134,13 @@ function commit(opts={refund:false}){
     memo: (els.orderMemo.value||""),
     credit: {
       enabled: onCredit,
-      name: (gid('creditWho').value||"").trim(),
-      status: onCredit ? (gid('creditStatus').value||"unpaid") : "none"
+      name: (els.creditWho.value||"").trim(),
+      status: onCredit ? (els.creditStatus.value||"unpaid") : "none"
     }
   };
+
+  // ★ 未送信キューに積む（ここが方法A）
+  enqueueTxForGoogle(tx);
 
   if(!opts.refund){
     // 在庫を減らす
@@ -1164,18 +1161,15 @@ function commit(opts={refund:false}){
   txs = [tx, ...txs];
   write(LS_T, txs);
 
-  // ★ 未送信キューに積む
-  enqueueTxForGoogle(tx);
-
   // カートクリア
   cart = [];
   els.discountPct.value = "";
   els.discountYen.value = "";
   els.cashReceived.value = "";
   els.orderMemo.value = "";
-  gid('creditFlag').checked = false;
-  gid('creditWho').value = "";
-  gid('creditStatus').value = "unpaid";
+  els.creditFlag.checked = false;
+  els.creditWho.value = "";
+  els.creditStatus.value = "unpaid";
 
   // 各種再描画
   renderCatalog();
@@ -1543,6 +1537,11 @@ function renderHistory(){
     if(!confirm("この取引を取消（void）しますか？")) return;
     txs = txs.map(t=>t.id===id ? {...t,void:true} : t);
     write(LS_T,txs);
+
+    // ★ void状態もGASに伝わるように未送信キューに積む
+    const voided = txs.find(t => t.id === id);
+    if (voided) enqueueTxForGoogle(voided);
+
     renderHistory();
     renderSummary();
     drawDashboard();
@@ -1680,7 +1679,7 @@ els.importItems.addEventListener("change",e=>{
       const price = Number(iPrice>=0 ? c[iPrice]:"");
       const stock = Number(iStock>=0 ? (c[iStock]||0):0);
       return {
-        id:newId(),
+        id:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()),
         name,
         price,
         stock,
@@ -1811,7 +1810,7 @@ els.backupLoad.addEventListener('change',e=>{
   e.target.value = "";
 });
 
-// GAS同期用 fetch（タイムアウト付き）
+/* ========= GAS同期：未送信キュー（unsentTxs）だけ送る ========= */
 async function fetchWithTimeout(input,init={},ms=15000){
   const ctrl = new AbortController();
   const id   = setTimeout(()=>ctrl.abort(),ms);
@@ -1822,20 +1821,28 @@ async function fetchWithTimeout(input,init={},ms=15000){
   }
 }
 
-// GAS同期（完全版）
 els.syncGoogle.addEventListener("click", async ()=>{
+  // 1. Webhook URL を保存＆取得
   let url = localStorage.getItem(WKEY) || "";
   url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（必ず https://.../exec）", url);
   if(!url) return;
   localStorage.setItem(WKEY,url);
 
+  // 2. 未送信の取引だけ送る
+  if (!unsentTxs.length) {
+    logSync("【同期ログ】\n未送信の取引はありません。");
+    alert("未送信の取引はありません。");
+    return;
+  }
+
   const payload = {
-    mode: "pushTx",
-    txs,
-    items
+    mode: "pushTx",   // GAS 側 handlePushTx_ が受け取る
+    txs: unsentTxs,   // ★ ここがポイント：全部ではなく unsentTxs だけ
+    items           // 商品マスタは全部送る（必要ならここも絞れる）
   };
 
   try{
+    // 3. GET で PING（GAS OK が返ってくる想定）
     const ping = await fetchWithTimeout(url,{method:"GET",cache:"no-store"},8000);
     const pingText = await ping.text().catch(()=>"(no body)");
     logSync(`PING: HTTP ${ping.status}\n${pingText}`);
@@ -1844,6 +1851,7 @@ els.syncGoogle.addEventListener("click", async ()=>{
       return;
     }
 
+    // 4. POST で本同期
     const res = await fetchWithTimeout(url,{
       method:"POST",
       headers:{"Content-Type":"text/plain"},
@@ -1854,7 +1862,12 @@ els.syncGoogle.addEventListener("click", async ()=>{
     logSync(`POST: HTTP ${res.status}\n${text}`);
 
     if(res.ok){
-      alert("同期完了");
+      alert("同期完了（未送信データのみ）");
+
+      // ★ 成功したら未送信キューを空にする
+      unsentTxs = [];
+      write(LS_UNSENT, unsentTxs);
+
     }else{
       alert(`同期失敗 (${res.status})`);
     }
@@ -1890,7 +1903,7 @@ function updatePreview(value){
     if(k==='C'){
       targetInput.value='';
     }else if(k==='⏎'){
-      // 何もしない（将来用）
+      // 特に何もしない
     }else{
       targetInput.value = (targetInput.value||'') + k;
     }
@@ -2046,7 +2059,7 @@ function init(){
     if(!name){alert("商品名は必須です");return;}
     if(isNaN(price)){alert("価格が不正です");return;}
     if(isNaN(stock)){alert("在庫が不正です");return;}
-    items = [{id:newId(),name,price,stock,sku,cat,dPct:0,dYen:0}, ...items];
+    items = [{id:crypto.randomUUID(),name,price,stock,sku,cat,dPct:0,dYen:0}, ...items];
     write(LS_I,items);
     els.newName.value = "";
     els.newPrice.value= "";
@@ -2057,12 +2070,11 @@ function init(){
     renderCatalog();
     renderStockList();
   });
-
   els.resetDemo.addEventListener("click", () => {
     if (!confirm("デモ商品を入れ直します。既存の商品は上書きされます。")) return;
     items = [
       {
-        id: newId(),
+        id: crypto.randomUUID(),
         name: "じゃがバター（塩）",
         price: 400,
         stock: 200,
@@ -2072,7 +2084,7 @@ function init(){
         dYen: 0
       },
       {
-        id: newId(),
+        id: crypto.randomUUID(),
         name: "じゃがバター（チーズ）",
         price: 450,
         stock: 200,
@@ -2083,7 +2095,7 @@ function init(){
       }
     ];
     write(LS_I, items);
-    refreshCatOptions();
+    buildCatChips();
     renderCatalog();
     renderStockList();
   });
