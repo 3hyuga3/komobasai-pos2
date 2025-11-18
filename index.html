@@ -722,7 +722,6 @@ const els = {
   backupSave:gid("backupSave"),
   backupLoad:gid("backupLoad"),
   syncGoogle:gid("syncGoogle"),
-  resetTxAll:gid("resetTxAll"),   // ★追加
   creditTable:gid("creditTable"),
   creditTotal:gid("creditTotal"),
   exportCredit:gid("exportCredit"),
@@ -742,15 +741,12 @@ const els = {
   toggleFootbar: gid("toggleFootbar"),
   viewDateFrom: gid("viewDateFrom"),
   viewDateTo: gid("viewDateTo"),
-  viewToday: gid("viewToday"),
-  creditFlag: gid("creditFlag"),
-  creditWho: gid("creditWho"),
-  creditStatus: gid("creditStatus")
+  viewToday: gid("viewToday")
 };
 
 /* ========= 状態 ========= */
 let items = read(LS_I, null);
-let unsentTxs = read(LS_UNSENT, []);  // ★ 未送信キュー
+let unsentTxs = read(LS_UNSENT, []);
 let txs   = read(LS_T, []);
 let misc  = read(LS_MISC, {
   theme:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light',
@@ -767,19 +763,7 @@ let misc  = read(LS_MISC, {
 });
 let cart = [];
 
-/* ========= 未送信キューに積む関数（方法Aの中枢） ========= */
-function enqueueTxForGoogle(tx){
-  if (!tx || !tx.id) return;
-  const idx = unsentTxs.findIndex(t => t.id === tx.id);
-  if (idx >= 0) {
-    unsentTxs[idx] = tx;
-  } else {
-    unsentTxs.push(tx);
-  }
-  write(LS_UNSENT, unsentTxs);
-}
-
-// itemsが壊れていたらデモ初期化（フード用）
+// itemsが壊れていたらデモ初期化
 function needDemoSeed(arr){
   if(!Array.isArray(arr) || arr.length===0) return true;
   return !arr.every(it => it && typeof it.name==="string" && "price" in it && "stock" in it);
@@ -790,7 +774,7 @@ if(needDemoSeed(items)){
       id: crypto.randomUUID(),
       name: "じゃがバター（塩）",
       price: 400,
-      stock: 200,          // 在庫は適当に。あとからUIから変えられる
+      stock: 200,
       sku: "JGBTR-SALT",
       cat: "フード",
       dPct: 0,
@@ -1126,10 +1110,6 @@ function commit(opts={refund:false}){
   const t = totals();
   const onCredit = gid('creditFlag').checked;
 
-  // ★ここで「受取金額」と「お釣り」を計算しておく
-  const received = parseNum(els.cashReceived.value);               // 受け取った金額
-  const change   = Math.max(0, received - t.total);                // お釣り（マイナスは0扱い）
-
   const tx = {
     id: Date.now()+""+Math.random().toString(36).slice(2),
     ts: Date.now(),
@@ -1146,21 +1126,9 @@ function commit(opts={refund:false}){
     credit: {
       enabled: onCredit,
       name: (gid('creditWho').value||"").trim(),
-      status: onCredit ? (gid('creditStatus").value||"unpaid") : "none"
-    },
-
-    // ★ここから追加（シートに送りたい2つの値）
-    cashReceived: received,   // 受取金額
-    change: change            // お釣り
-    // ★ここまで追加
+      status: onCredit ? (gid('creditStatus').value||"unpaid") : "none"
+    }
   };
-
-  // この下は今まで通り（在庫更新→保存→同期キュー→描画）
-  …
-}
-
-  // ★ 未送信キューに積む（ここが方法A）
-  enqueueTxForGoogle(tx);
 
   if(!opts.refund){
     // 在庫を減らす
@@ -1181,15 +1149,18 @@ function commit(opts={refund:false}){
   txs = [tx, ...txs];
   write(LS_T, txs);
 
+  // ★ 未送信としてキューに積む（GAS側で「新規分だけ」を処理）
+  enqueueTxForGoogle(tx);
+
   // カートクリア
   cart = [];
   els.discountPct.value = "";
   els.discountYen.value = "";
   els.cashReceived.value = "";
   els.orderMemo.value = "";
-  els.creditFlag.checked = false;
-  els.creditWho.value = "";
-  els.creditStatus.value = "unpaid";
+  gid('creditFlag').checked = false;
+  gid('creditWho').value = "";
+  gid('creditStatus').value = "unpaid";
 
   // 各種再描画
   renderCatalog();
@@ -1557,11 +1528,6 @@ function renderHistory(){
     if(!confirm("この取引を取消（void）しますか？")) return;
     txs = txs.map(t=>t.id===id ? {...t,void:true} : t);
     write(LS_T,txs);
-
-    // ★ void状態もGASに伝わるように未送信キューに積む
-    const voided = txs.find(t => t.id === id);
-    if (voided) enqueueTxForGoogle(voided);
-
     renderHistory();
     renderSummary();
     drawDashboard();
@@ -1652,31 +1618,6 @@ setInterval(()=>{
     }
   });
 },5000);
-/* ========= 取引データ全削除ボタン（本番前リセット用） ========= */
-els.resetTxAll.addEventListener('click', () => {
-  if (!confirm("⚠️ ローカルの取引履歴（デモ時代を含む）をすべて削除します。本番開始前に1回だけ押してください。本当に実行しますか？")) {
-    return;
-  }
-
-  // ローカル変数を空に
-  txs = [];
-  unsentTxs = [];
-
-  // localStorage 側も上書き
-  write(LS_T, txs);
-  write(LS_UNSENT, unsentTxs);
-
-  // 画面の集計・履歴などをリフレッシュ
-  renderSummary();
-  renderItemAgg();
-  renderHistory();
-  drawDashboard();
-  renderCredit();
-  calcStockWarnings();
-  renderStockList();
-
-  alert("ローカルの取引データを削除しました。\nスプレッドシート側の不要な行も削除してから、もう一度同期してください。");
-});
 
 /* ========= CSV / バックアップ / GAS同期 ========= */
 // 商品CSV
@@ -1855,7 +1796,12 @@ els.backupLoad.addEventListener('change',e=>{
   e.target.value = "";
 });
 
-/* ========= GAS同期：未送信キュー（unsentTxs）だけ送る ========= */
+// ===== GAS同期：新規分だけ送る用のキュー管理 =====
+function enqueueTxForGoogle(tx){
+  unsentTxs.push(tx);
+  write(LS_UNSENT, unsentTxs);
+}
+
 async function fetchWithTimeout(input,init={},ms=15000){
   const ctrl = new AbortController();
   const id   = setTimeout(()=>ctrl.abort(),ms);
@@ -1867,27 +1813,23 @@ async function fetchWithTimeout(input,init={},ms=15000){
 }
 
 els.syncGoogle.addEventListener("click", async ()=>{
-  // 1. Webhook URL を保存＆取得
   let url = localStorage.getItem(WKEY) || "";
   url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（必ず https://.../exec）", url);
   if(!url) return;
   localStorage.setItem(WKEY,url);
 
-  // 2. 未送信の取引だけ送る
-  if (!unsentTxs.length) {
-    logSync("【同期ログ】\n未送信の取引はありません。");
-    alert("未送信の取引はありません。");
+  const payload = {
+    mode: "pushTxDelta",   // 新規分だけ
+    txs: unsentTxs
+  };
+
+  if(!unsentTxs.length){
+    logSync("【同期ログ】\n新規取引はありません。");
+    alert("新しく送る取引はありません");
     return;
   }
 
-  const payload = {
-    mode: "pushTx",   // GAS 側 handlePushTx_ が受け取る
-    txs: unsentTxs,   // ★ ここがポイント：全部ではなく unsentTxs だけ
-    items           // 商品マスタは全部送る（必要ならここも絞れる）
-  };
-
   try{
-    // 3. GET で PING（GAS OK が返ってくる想定）
     const ping = await fetchWithTimeout(url,{method:"GET",cache:"no-store"},8000);
     const pingText = await ping.text().catch(()=>"(no body)");
     logSync(`PING: HTTP ${ping.status}\n${pingText}`);
@@ -1896,7 +1838,6 @@ els.syncGoogle.addEventListener("click", async ()=>{
       return;
     }
 
-    // 4. POST で本同期
     const res = await fetchWithTimeout(url,{
       method:"POST",
       headers:{"Content-Type":"text/plain"},
@@ -1907,12 +1848,9 @@ els.syncGoogle.addEventListener("click", async ()=>{
     logSync(`POST: HTTP ${res.status}\n${text}`);
 
     if(res.ok){
-      alert("同期完了（未送信データのみ）");
-
-      // ★ 成功したら未送信キューを空にする
+      alert("同期完了（新規分を送信しました）");
       unsentTxs = [];
       write(LS_UNSENT, unsentTxs);
-
     }else{
       alert(`同期失敗 (${res.status})`);
     }
@@ -2069,7 +2007,6 @@ function init(){
   applyTheme();
   applyCatalogView();
 
-  // 入力の復元
   els.cashier.value = read("x_cashier","") || "";
   els.cashier.addEventListener("input",()=>{
     localStorage.setItem("x_cashier",JSON.stringify(els.cashier.value));
@@ -2145,7 +2082,6 @@ function init(){
     renderStockList();
   });
 
-  // 初期描画
   buildCatChips();
   renderCatalog();
   renderCart();
