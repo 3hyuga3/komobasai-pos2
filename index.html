@@ -617,6 +617,12 @@ const LS_T   = "x_txs_v1";
 const LS_MISC= "x_misc_v1";
 const WKEY   = "komaba_pos_gas_webhook_v1";
 
+// 安全なID発行（crypto.randomUUID が無い環境にも対応）
+function newId(){
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return "id-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+}
+
 function gid(id){return document.getElementById(id);}
 function read(k,d){try{return JSON.parse(localStorage.getItem(k)) ?? d;}catch{return d}}
 function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
@@ -653,6 +659,16 @@ function warnBeep(){
   if(navigator.vibrate) navigator.vibrate([60,40,60]);
 }
 function logSync(t){gid("syncLog").textContent="【同期ログ】\n"+t}
+
+/* ★ GASに送る用：取引を未送信キューに積む（今はローカル保存だけ） */
+function enqueueTxForGoogle(tx){
+  try{
+    unsentTxs.push(tx);
+    write(LS_UNSENT, unsentTxs);
+  }catch(e){
+    console.error("enqueueTxForGoogle error", e);
+  }
+}
 
 /* ========= 要素参照 ========= */
 const els = {
@@ -765,7 +781,7 @@ function needDemoSeed(arr){
 if(needDemoSeed(items)){
   items = [
     {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: "じゃがバター（塩）",
       price: 400,
       stock: 200,          // 在庫は適当に。あとからUIから変えられる
@@ -775,7 +791,7 @@ if(needDemoSeed(items)){
       dYen: 0
     },
     {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: "じゃがバター（チーズ）",
       price: 450,
       stock: 200,
@@ -785,7 +801,6 @@ if(needDemoSeed(items)){
       dYen: 0
     }
   ];
-  // 初回のみ保存（既存がある時は上書きしない）
   write(LS_I, items);
 }
 
@@ -850,6 +865,11 @@ function buildCatChips(){
       renderCatalog();
     });
   });
+}
+
+// カテゴリ表示をまとめて更新するラッパ
+function refreshCatOptions(){
+  buildCatChips();
 }
 
 /* ========= 商品一覧 ========= */
@@ -1144,7 +1164,7 @@ function commit(opts={refund:false}){
   txs = [tx, ...txs];
   write(LS_T, txs);
 
-  // ★ ここで「未送信キュー」に積んで Google シートに自動同期
+  // ★ 未送信キューに積む
   enqueueTxForGoogle(tx);
 
   // カートクリア
@@ -1660,7 +1680,7 @@ els.importItems.addEventListener("change",e=>{
       const price = Number(iPrice>=0 ? c[iPrice]:"");
       const stock = Number(iStock>=0 ? (c[iStock]||0):0);
       return {
-        id:(crypto.randomUUID?crypto.randomUUID():Date.now()+"-"+Math.random()),
+        id:newId(),
         name,
         price,
         stock,
@@ -1791,7 +1811,7 @@ els.backupLoad.addEventListener('change',e=>{
   e.target.value = "";
 });
 
-// GAS同期（完全版）
+// GAS同期用 fetch（タイムアウト付き）
 async function fetchWithTimeout(input,init={},ms=15000){
   const ctrl = new AbortController();
   const id   = setTimeout(()=>ctrl.abort(),ms);
@@ -1802,22 +1822,20 @@ async function fetchWithTimeout(input,init={},ms=15000){
   }
 }
 
+// GAS同期（完全版）
 els.syncGoogle.addEventListener("click", async ()=>{
-  // 1. Webhook URL を保存＆取得
   let url = localStorage.getItem(WKEY) || "";
   url = prompt("（学内限定）Apps ScriptのWebhook URLを入力（必ず https://.../exec）", url);
   if(!url) return;
   localStorage.setItem(WKEY,url);
 
-  // 2. 送信データ作成（取引 + 商品）
   const payload = {
-    mode: "pushTx",   // GAS 側 handlePushTx_ が受け取る
+    mode: "pushTx",
     txs,
     items
   };
 
   try{
-    // 3. GET で PING（GAS OK が返ってくる想定）
     const ping = await fetchWithTimeout(url,{method:"GET",cache:"no-store"},8000);
     const pingText = await ping.text().catch(()=>"(no body)");
     logSync(`PING: HTTP ${ping.status}\n${pingText}`);
@@ -1826,7 +1844,6 @@ els.syncGoogle.addEventListener("click", async ()=>{
       return;
     }
 
-    // 4. POST で本同期
     const res = await fetchWithTimeout(url,{
       method:"POST",
       headers:{"Content-Type":"text/plain"},
@@ -1873,7 +1890,7 @@ function updatePreview(value){
     if(k==='C'){
       targetInput.value='';
     }else if(k==='⏎'){
-      // 特に何もしない（将来、確定アクションを入れるならここ）
+      // 何もしない（将来用）
     }else{
       targetInput.value = (targetInput.value||'') + k;
     }
@@ -1939,7 +1956,6 @@ function initRange(){
 
 /* ========= プロモ設定の永続化 ========= */
 function initPromosFromMisc(){
-  // 値をUIへ反映
   els.saleStart.value = misc.sale?.start || "";
   els.saleEnd.value   = misc.sale?.end   || "";
   els.salePct.value   = misc.sale?.pct   || "";
@@ -1947,7 +1963,6 @@ function initPromosFromMisc(){
   els.volN.value      = misc.volume?.n    || "";
   els.volPct.value    = misc.volume?.pct  || "";
 
-  // 変更時にmiscへ保存
   els.saleStart.addEventListener('change',()=>{
     misc.sale = misc.sale || {};
     misc.sale.start = els.saleStart.value;
@@ -2031,7 +2046,7 @@ function init(){
     if(!name){alert("商品名は必須です");return;}
     if(isNaN(price)){alert("価格が不正です");return;}
     if(isNaN(stock)){alert("在庫が不正です");return;}
-    items = [{id:crypto.randomUUID(),name,price,stock,sku,cat,dPct:0,dYen:0}, ...items];
+    items = [{id:newId(),name,price,stock,sku,cat,dPct:0,dYen:0}, ...items];
     write(LS_I,items);
     els.newName.value = "";
     els.newPrice.value= "";
@@ -2042,11 +2057,12 @@ function init(){
     renderCatalog();
     renderStockList();
   });
+
   els.resetDemo.addEventListener("click", () => {
     if (!confirm("デモ商品を入れ直します。既存の商品は上書きされます。")) return;
     items = [
       {
-        id: crypto.randomUUID(),
+        id: newId(),
         name: "じゃがバター（塩）",
         price: 400,
         stock: 200,
@@ -2056,7 +2072,7 @@ function init(){
         dYen: 0
       },
       {
-        id: crypto.randomUUID(),
+        id: newId(),
         name: "じゃがバター（チーズ）",
         price: 450,
         stock: 200,
@@ -2067,7 +2083,7 @@ function init(){
       }
     ];
     write(LS_I, items);
-    buildCatChips();
+    refreshCatOptions();
     renderCatalog();
     renderStockList();
   });
